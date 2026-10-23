@@ -725,6 +725,17 @@ class Exam(Base):
         DateTime(timezone=True), nullable=True
     )
 
+    # Result release (Phase 8)
+    results_published: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False
+    )
+    results_published_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    results_published_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
     # Freeze on approval
     frozen: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     frozen_snapshot: Mapped[dict | None] = mapped_column(JSON, nullable=True)
@@ -845,6 +856,59 @@ class AttemptAnswer(Base):
     )
 
     attempt: Mapped["ExamAttempt"] = relationship(back_populates="answers")
+
+
+class AttemptScore(Base):
+    __tablename__ = "attempt_scores"
+    __table_args__ = (
+        UniqueConstraint("attempt_id", name="uq_attempt_score"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    attempt_id: Mapped[int] = mapped_column(
+        ForeignKey("exam_attempts.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    exam_id: Mapped[int] = mapped_column(
+        ForeignKey("exams.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    institution_id: Mapped[int] = mapped_column(
+        ForeignKey("institutions.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    student_user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    total_marks: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    awarded_marks: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    score_version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    breakdown: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    scored_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    scored_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+
+
+class ScoreHistory(Base):
+    """Append-only record of every scoring run and manual correction."""
+
+    __tablename__ = "score_history"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    attempt_id: Mapped[int] = mapped_column(
+        ForeignKey("exam_attempts.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    score_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    total_marks: Mapped[int] = mapped_column(Integer, nullable=False)
+    awarded_marks: Mapped[int] = mapped_column(Integer, nullable=False)
+    breakdown: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    scored_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
 
 
 class GenerationStatus(str, enum.Enum):
