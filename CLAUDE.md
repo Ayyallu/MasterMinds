@@ -6,7 +6,8 @@ Multi-tenant online examination platform for schools and colleges.
 - **Phase 1 (foundation):** implemented — backend + frontend skeleton, health check, empty baseline migration.
 - **Phase 1.1 (hardening):** implemented — CORS guard, bounded health probe, resilient frontend polling.
 - **Phase 2 (auth, sessions, tenant security):** implemented — identity, roles, institution memberships, argon2 password hashing, JWT access + rotating refresh tokens with replay detection, login rate limiting, password reset (email stubbed) and change, TOTP MFA for Super Admin, server-side tenant isolation, audit events. Migration `0002_auth`.
-- Later phases (academic admin, question bank, AI generation, exams, delivery, scoring, hardening, deployment) are **not** implemented. Build them one phase at a time.
+- **Phase 3 (institution & academic admin):** implemented — Super Admin reviews/approves/rejects institution registrations and provisions Institution Admins; academic structure (academic years, terms, grade levels, departments, courses, class groups); invitations + student self-registration (pending until admin approval); teacher assignments; enrollments with preserved history (transfer closes the old row); tenant-scoped retryable CSV roster import with preview + error report; audit events; a minimal admin UI at `/admin`. Migration `0003_academic`.
+- Later phases (question bank, AI generation, exams, delivery, scoring, hardening, deployment) are **not** implemented. Build them one phase at a time.
 
 ## Auth model (Phase 2)
 - **Login identifier:** email (staff) or institution-scoped register number (students, with institution code).

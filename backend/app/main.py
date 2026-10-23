@@ -8,7 +8,9 @@ from sqlalchemy import text
 
 from app.config import get_settings
 from app.db import engine
+from app.routers import academic as academic_router
 from app.routers import auth as auth_router
+from app.routers import institutions as institutions_router
 
 logger = logging.getLogger("masterminds")
 
@@ -72,3 +74,6 @@ async def health() -> JSONResponse:
 
 
 app.include_router(auth_router.router)
+app.include_router(institutions_router.router)
+app.include_router(academic_router.router)
+app.include_router(academic_router.public_router)

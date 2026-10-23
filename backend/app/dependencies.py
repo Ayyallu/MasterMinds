@@ -78,6 +78,26 @@ def require_super_admin():
     return _dep
 
 
+def require_institution_admin():
+    """Path dependency: caller must be Super Admin, or an Institution Admin
+    scoped to the {institution_id} in the route."""
+
+    async def _dep(
+        institution_id: int, current: CurrentUser = Depends(get_current_user)
+    ) -> CurrentUser:
+        if current.is_super_admin:
+            return current
+        if RoleName.institution_admin.value not in current.roles:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Institution Admin required",
+            )
+        enforce_tenant_scope(current, institution_id)
+        return current
+
+    return _dep
+
+
 def enforce_tenant_scope(current: CurrentUser, institution_id: int) -> None:
     """Server-side tenant guard. Never trust a browser-supplied institution id.
 

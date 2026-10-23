@@ -2,11 +2,12 @@
 from __future__ import annotations
 
 import enum
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 from sqlalchemy import (
     JSON,
     Boolean,
+    Date,
     DateTime,
     ForeignKey,
     Integer,
@@ -194,6 +195,274 @@ class PasswordResetToken(Base):
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+
+
+class RequestStatus(str, enum.Enum):
+    pending = "pending"
+    approved = "approved"
+    rejected = "rejected"
+
+
+class GradeKind(str, enum.Enum):
+    school_grade = "school_grade"
+    college_year = "college_year"
+
+
+class EnrollmentStatus(str, enum.Enum):
+    active = "active"
+    transferred = "transferred"
+    inactive = "inactive"
+    completed = "completed"
+
+
+class InvitationStatus(str, enum.Enum):
+    pending = "pending"
+    accepted = "accepted"
+    revoked = "revoked"
+    expired = "expired"
+
+
+class ImportStatus(str, enum.Enum):
+    validated = "validated"
+    committed = "committed"
+    failed = "failed"
+
+
+class InstitutionRegistrationRequest(Base):
+    __tablename__ = "institution_registration_requests"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    institution_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    requested_code: Mapped[str] = mapped_column(String(64), nullable=False)
+    contact_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    contact_email: Mapped[str] = mapped_column(String(320), nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(16), default=RequestStatus.pending.value, nullable=False, index=True
+    )
+    reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    decided_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    created_institution_id: Mapped[int | None] = mapped_column(
+        ForeignKey("institutions.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+    decided_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+
+class AcademicYear(Base):
+    __tablename__ = "academic_years"
+    __table_args__ = (
+        UniqueConstraint("institution_id", "name", name="uq_academic_year_name"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    institution_id: Mapped[int] = mapped_column(
+        ForeignKey("institutions.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    name: Mapped[str] = mapped_column(String(64), nullable=False)
+    start_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    end_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    is_current: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
+
+class Term(Base):
+    __tablename__ = "terms"
+    __table_args__ = (
+        UniqueConstraint("academic_year_id", "name", name="uq_term_name"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    institution_id: Mapped[int] = mapped_column(
+        ForeignKey("institutions.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    academic_year_id: Mapped[int] = mapped_column(
+        ForeignKey("academic_years.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    name: Mapped[str] = mapped_column(String(64), nullable=False)
+    sequence: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    start_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    end_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+
+
+class GradeLevel(Base):
+    __tablename__ = "grade_levels"
+    __table_args__ = (
+        UniqueConstraint("institution_id", "name", name="uq_grade_level_name"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    institution_id: Mapped[int] = mapped_column(
+        ForeignKey("institutions.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    name: Mapped[str] = mapped_column(String(64), nullable=False)
+    kind: Mapped[str] = mapped_column(
+        String(16), default=GradeKind.school_grade.value, nullable=False
+    )
+    sequence: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+
+
+class Department(Base):
+    __tablename__ = "departments"
+    __table_args__ = (
+        UniqueConstraint("institution_id", "name", name="uq_department_name"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    institution_id: Mapped[int] = mapped_column(
+        ForeignKey("institutions.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+
+class Course(Base):
+    __tablename__ = "courses"
+    __table_args__ = (
+        UniqueConstraint("institution_id", "code", name="uq_course_code"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    institution_id: Mapped[int] = mapped_column(
+        ForeignKey("institutions.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    department_id: Mapped[int | None] = mapped_column(
+        ForeignKey("departments.id", ondelete="SET NULL"), nullable=True
+    )
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    code: Mapped[str] = mapped_column(String(64), nullable=False)
+
+
+class ClassGroup(Base):
+    """A class, section or batch that students enroll into."""
+
+    __tablename__ = "class_groups"
+    __table_args__ = (
+        UniqueConstraint("institution_id", "name", name="uq_class_group_name"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    institution_id: Mapped[int] = mapped_column(
+        ForeignKey("institutions.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    name: Mapped[str] = mapped_column(String(128), nullable=False)
+    kind: Mapped[str] = mapped_column(String(16), default="class", nullable=False)
+    grade_level_id: Mapped[int | None] = mapped_column(
+        ForeignKey("grade_levels.id", ondelete="SET NULL"), nullable=True
+    )
+    term_id: Mapped[int | None] = mapped_column(
+        ForeignKey("terms.id", ondelete="SET NULL"), nullable=True
+    )
+    course_id: Mapped[int | None] = mapped_column(
+        ForeignKey("courses.id", ondelete="SET NULL"), nullable=True
+    )
+
+
+class TeacherAssignment(Base):
+    __tablename__ = "teacher_assignments"
+    __table_args__ = (
+        UniqueConstraint(
+            "teacher_user_id", "class_group_id", name="uq_teacher_assignment"
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    institution_id: Mapped[int] = mapped_column(
+        ForeignKey("institutions.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    teacher_user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    class_group_id: Mapped[int] = mapped_column(
+        ForeignKey("class_groups.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+
+
+class Enrollment(Base):
+    __tablename__ = "enrollments"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    institution_id: Mapped[int] = mapped_column(
+        ForeignKey("institutions.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    student_user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    class_group_id: Mapped[int] = mapped_column(
+        ForeignKey("class_groups.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    term_id: Mapped[int | None] = mapped_column(
+        ForeignKey("terms.id", ondelete="SET NULL"), nullable=True
+    )
+    status: Mapped[str] = mapped_column(
+        String(16), default=EnrollmentStatus.active.value, nullable=False, index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+    ended_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+
+class Invitation(Base):
+    __tablename__ = "invitations"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    institution_id: Mapped[int] = mapped_column(
+        ForeignKey("institutions.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    email: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    role: Mapped[str] = mapped_column(String(64), nullable=False)
+    register_number: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    token_hash: Mapped[str] = mapped_column(
+        String(64), unique=True, nullable=False, index=True
+    )
+    status: Mapped[str] = mapped_column(
+        String(16), default=InvitationStatus.pending.value, nullable=False, index=True
+    )
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    created_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    accepted_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+
+
+class RosterImport(Base):
+    __tablename__ = "roster_imports"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    institution_id: Mapped[int] = mapped_column(
+        ForeignKey("institutions.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    created_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    total_rows: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    valid_rows: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    error_rows: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    errors: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+    finished_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
     )
 
 
