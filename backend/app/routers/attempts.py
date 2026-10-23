@@ -1,6 +1,7 @@
 """Phase 7 endpoints: student exam delivery and reliable attempts."""
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -171,8 +172,8 @@ async def list_student_exams(
             "results_published": exam.results_published,
             "can_start": (
                 exam.status in (ExamStatus.scheduled.value, ExamStatus.live.value)
-                and (exam.start_at is None or (exam.start_at.replace(tzinfo=exam.start_at.tzinfo or timezone.utc) <= now))
-                and (exam.end_at is None or (exam.end_at.replace(tzinfo=exam.end_at.tzinfo or timezone.utc) >= now))
+                and (exam.start_at is None or ((exam.start_at if exam.start_at.tzinfo else exam.start_at.replace(tzinfo=timezone.utc)) <= now))
+                and (exam.end_at is None or ((exam.end_at if exam.end_at.tzinfo else exam.end_at.replace(tzinfo=timezone.utc)) >= now))
                 and len(attempts) < exam.attempt_limit
             ),
             "attempts": [{
