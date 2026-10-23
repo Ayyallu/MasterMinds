@@ -2,10 +2,21 @@
 
 Multi-tenant Online Exam SaaS for schools and colleges.
 
-**Phase 1 (foundation) is implemented:** a FastAPI backend with an async
-PostgreSQL health check and an empty baseline Alembic migration, plus a Next.js +
-TypeScript frontend that displays backend health. No authentication, exams, AI, or
-billing yet — those arrive in later phases.
+The repository contains the phased backend capabilities documented in
+[CLAUDE.md](CLAUDE.md), including authentication, tenant-scoped academic
+administration, question banks, exam delivery, scoring, and result release.
+The Next.js frontend includes the admin portal and a student portal for sign-in,
+pending registration, exam attempts, autosaving answers, and released results.
+
+- Student sign-in: `/student`
+- Student registration: `/student/register` (requires institution-admin approval)
+- Student exam attempt: `/student/attempts/{attemptId}`
+- Released result: `/student/results/{attemptId}`
+- Admin portal: `/admin`
+
+The student UI uses the existing FastAPI endpoints and does not introduce a new
+database migration. Review the current implementation and run CI before merging
+student-portal changes.
 
 ## Quick start
 
