@@ -45,6 +45,18 @@ class Settings(BaseSettings):
     # TOTP issuer label shown in authenticator apps.
     totp_issuer: str = "MasterMinds"
 
+    # Private document storage (filesystem for local/dev; object storage in prod).
+    uploads_dir: str = "var/uploads"
+    upload_max_bytes: int = 10 * 1024 * 1024  # 10 MiB
+    upload_allowed_types: tuple[str, ...] = (
+        "application/pdf",
+        "text/plain",
+        "text/csv",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "image/png",
+        "image/jpeg",
+    )
+
     _DEV_SECRET_DEFAULTS = frozenset({"dev-insecure-change-me", "", "changeme"})
 
     @property

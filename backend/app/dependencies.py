@@ -98,6 +98,27 @@ def require_institution_admin():
     return _dep
 
 
+def require_institution_staff():
+    """Path dependency: Super Admin, Institution Admin, or Teacher scoped to
+    the {institution_id} in the route. Never a student (keeps answer keys safe)."""
+
+    allowed = {RoleName.institution_admin.value, RoleName.teacher.value}
+
+    async def _dep(
+        institution_id: int, current: CurrentUser = Depends(get_current_user)
+    ) -> CurrentUser:
+        if current.is_super_admin:
+            return current
+        if not allowed.intersection(current.roles):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail="Staff access required"
+            )
+        enforce_tenant_scope(current, institution_id)
+        return current
+
+    return _dep
+
+
 def enforce_tenant_scope(current: CurrentUser, institution_id: int) -> None:
     """Server-side tenant guard. Never trust a browser-supplied institution id.
 

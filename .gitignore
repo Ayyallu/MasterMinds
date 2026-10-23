@@ -5,6 +5,7 @@
 !.env.local.example
 
 # Python
+backend/var/
 __pycache__/
 *.py[cod]
 .venv/

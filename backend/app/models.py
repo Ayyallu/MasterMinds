@@ -466,6 +466,190 @@ class RosterImport(Base):
     )
 
 
+class QuestionType(str, enum.Enum):
+    single_mcq = "single_mcq"
+    multi_mcq = "multi_mcq"
+    true_false = "true_false"
+    numerical = "numerical"
+
+
+class QuestionStatus(str, enum.Enum):
+    draft = "draft"
+    in_review = "in_review"
+    approved = "approved"
+    rejected = "rejected"
+
+
+class Difficulty(str, enum.Enum):
+    easy = "easy"
+    medium = "medium"
+    hard = "hard"
+
+
+class SyllabusTopic(Base):
+    """A unit/topic in an institution's syllabus (optionally hierarchical)."""
+
+    __tablename__ = "syllabus_topics"
+    __table_args__ = (
+        UniqueConstraint("institution_id", "name", "parent_id", name="uq_topic_name"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    institution_id: Mapped[int] = mapped_column(
+        ForeignKey("institutions.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    course_id: Mapped[int | None] = mapped_column(
+        ForeignKey("courses.id", ondelete="SET NULL"), nullable=True
+    )
+    grade_level_id: Mapped[int | None] = mapped_column(
+        ForeignKey("grade_levels.id", ondelete="SET NULL"), nullable=True
+    )
+    term_id: Mapped[int | None] = mapped_column(
+        ForeignKey("terms.id", ondelete="SET NULL"), nullable=True
+    )
+    parent_id: Mapped[int | None] = mapped_column(
+        ForeignKey("syllabus_topics.id", ondelete="SET NULL"), nullable=True
+    )
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+
+
+class LearningObjective(Base):
+    __tablename__ = "learning_objectives"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    institution_id: Mapped[int] = mapped_column(
+        ForeignKey("institutions.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    topic_id: Mapped[int] = mapped_column(
+        ForeignKey("syllabus_topics.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    description: Mapped[str] = mapped_column(String(1000), nullable=False)
+
+
+class Document(Base):
+    """A privately-stored syllabus/material upload. Content is never executed."""
+
+    __tablename__ = "documents"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    institution_id: Mapped[int] = mapped_column(
+        ForeignKey("institutions.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    uploaded_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    content_type: Mapped[str] = mapped_column(String(128), nullable=False)
+    size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
+    storage_path: Mapped[str] = mapped_column(String(512), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+
+
+class Question(Base):
+    """Logical question. Content lives in immutable QuestionVersion rows."""
+
+    __tablename__ = "questions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    # Null institution_id marks a platform-global question (managed in Phase 5).
+    institution_id: Mapped[int | None] = mapped_column(
+        ForeignKey("institutions.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    is_global: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    created_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    withdrawn: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+
+    versions: Mapped[list["QuestionVersion"]] = relationship(
+        back_populates="question", cascade="all, delete-orphan"
+    )
+
+
+class QuestionVersion(Base):
+    __tablename__ = "question_versions"
+    __table_args__ = (
+        UniqueConstraint("question_id", "version_no", name="uq_question_version_no"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    question_id: Mapped[int] = mapped_column(
+        ForeignKey("questions.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    version_no: Mapped[int] = mapped_column(Integer, nullable=False)
+    type: Mapped[str] = mapped_column(String(16), nullable=False)
+    text: Mapped[str] = mapped_column(String(4000), nullable=False)
+    explanation: Mapped[str | None] = mapped_column(String(4000), nullable=True)
+
+    course_id: Mapped[int | None] = mapped_column(
+        ForeignKey("courses.id", ondelete="SET NULL"), nullable=True
+    )
+    topic_id: Mapped[int | None] = mapped_column(
+        ForeignKey("syllabus_topics.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    objective_id: Mapped[int | None] = mapped_column(
+        ForeignKey("learning_objectives.id", ondelete="SET NULL"), nullable=True
+    )
+    grade_level_id: Mapped[int | None] = mapped_column(
+        ForeignKey("grade_levels.id", ondelete="SET NULL"), nullable=True
+    )
+    term_id: Mapped[int | None] = mapped_column(
+        ForeignKey("terms.id", ondelete="SET NULL"), nullable=True
+    )
+    difficulty: Mapped[str] = mapped_column(
+        String(16), default=Difficulty.medium.value, nullable=False
+    )
+    marks: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    # Numerical answer key (type == numerical). Stored as text to avoid float drift.
+    numerical_answer: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    numerical_tolerance: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+    source: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    status: Mapped[str] = mapped_column(
+        String(16), default=QuestionStatus.draft.value, nullable=False, index=True
+    )
+    created_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    approved_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+    approved_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    question: Mapped["Question"] = relationship(back_populates="versions")
+    options: Mapped[list["QuestionOption"]] = relationship(
+        back_populates="version", cascade="all, delete-orphan"
+    )
+
+
+class QuestionOption(Base):
+    __tablename__ = "question_options"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    question_version_id: Mapped[int] = mapped_column(
+        ForeignKey("question_versions.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    text: Mapped[str] = mapped_column(String(2000), nullable=False)
+    # Answer key — never serialized to students.
+    is_correct: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    order_index: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
+    version: Mapped["QuestionVersion"] = relationship(back_populates="options")
+
+
 class AuditEvent(Base):
     __tablename__ = "audit_events"
 

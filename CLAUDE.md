@@ -7,7 +7,13 @@ Multi-tenant online examination platform for schools and colleges.
 - **Phase 1.1 (hardening):** implemented — CORS guard, bounded health probe, resilient frontend polling.
 - **Phase 2 (auth, sessions, tenant security):** implemented — identity, roles, institution memberships, argon2 password hashing, JWT access + rotating refresh tokens with replay detection, login rate limiting, password reset (email stubbed) and change, TOTP MFA for Super Admin, server-side tenant isolation, audit events. Migration `0002_auth`.
 - **Phase 3 (institution & academic admin):** implemented — Super Admin reviews/approves/rejects institution registrations and provisions Institution Admins; academic structure (academic years, terms, grade levels, departments, courses, class groups); invitations + student self-registration (pending until admin approval); teacher assignments; enrollments with preserved history (transfer closes the old row); tenant-scoped retryable CSV roster import with preview + error report; audit events; a minimal admin UI at `/admin`. Migration `0003_academic`.
-- Later phases (question bank, AI generation, exams, delivery, scoring, hardening, deployment) are **not** implemented. Build them one phase at a time.
+- **Phase 4 (syllabus & question bank):** implemented — syllabus topics + learning objectives; institution-private questions with **immutable versions** (editing creates a new version); 4 launch types (single MCQ, multi-select MCQ, true/false, numerical) with type-specific validation; per-version review status (draft → in_review → approved/rejected), only approved versions selectable later; **answer keys never exposed to students** (staff-only endpoints + a student-safe serializer); search/filter by curriculum/grade/term/topic/objective/type/difficulty; private document uploads stored on the filesystem (`backend/var/uploads`, git-ignored) with validated type/size and authorized download. Migration `0004_questionbank`.
+- Later phases (AI generation, exams, delivery, scoring, hardening, deployment) are **not** implemented. Build them one phase at a time.
+
+## Question bank notes (Phase 4)
+- Questions are logical rows; content lives in immutable `question_versions` with `question_options` (answer key in `is_correct` / `numerical_answer`). Never serialize keys to students — use `question_service.serialize(..., include_keys=False)`.
+- Staff = Institution Admin or Teacher (`require_institution_staff`); review/approval = Institution Admin. Students have no access to question-bank endpoints.
+- `is_global` / nullable `institution_id` reserve space for the Phase 5 global shared library; global creation is **not** enabled yet.
 
 ## Auth model (Phase 2)
 - **Login identifier:** email (staff) or institution-scoped register number (students, with institution code).

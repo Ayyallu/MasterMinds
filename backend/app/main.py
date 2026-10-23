@@ -11,6 +11,7 @@ from app.db import engine
 from app.routers import academic as academic_router
 from app.routers import auth as auth_router
 from app.routers import institutions as institutions_router
+from app.routers import questions as questions_router
 
 logger = logging.getLogger("masterminds")
 
@@ -77,3 +78,4 @@ app.include_router(auth_router.router)
 app.include_router(institutions_router.router)
 app.include_router(academic_router.router)
 app.include_router(academic_router.public_router)
+app.include_router(questions_router.router)
