@@ -78,6 +78,22 @@ def require_super_admin():
     return _dep
 
 
+def require_central_reviewer():
+    """Platform Central Academic Reviewer (or Super Admin) for the global library."""
+
+    async def _dep(current: CurrentUser = Depends(get_current_user)) -> CurrentUser:
+        if current.is_super_admin:
+            return current
+        if RoleName.central_academic_reviewer.value not in current.roles:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Central Academic Reviewer required",
+            )
+        return current
+
+    return _dep
+
+
 def require_institution_admin():
     """Path dependency: caller must be Super Admin, or an Institution Admin
     scoped to the {institution_id} in the route."""

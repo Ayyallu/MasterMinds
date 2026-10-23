@@ -30,6 +30,18 @@ def record_attempt(key: str) -> None:
         _attempts.setdefault(key, []).append(now)
 
 
+def is_limited(key: str, max_attempts: int, window_seconds: int) -> bool:
+    """Generic sliding-window check for non-login actions (e.g. AI generation)."""
+    now = time.monotonic()
+    with _lock:
+        hits = [t for t in _attempts.get(key, []) if now - t < window_seconds]
+        _attempts[key] = hits
+        if len(hits) >= max_attempts:
+            return True
+        hits.append(now)
+        return False
+
+
 def reset(key: str) -> None:
     with _lock:
         _attempts.pop(key, None)

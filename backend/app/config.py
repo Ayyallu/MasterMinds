@@ -45,6 +45,17 @@ class Settings(BaseSettings):
     # TOTP issuer label shown in authenticator apps.
     totp_issuer: str = "MasterMinds"
 
+    # --- AI question generation ---
+    ai_provider: str = "mock"  # "mock" | "nvidia"
+    nvidia_api_key: str = ""
+    nvidia_base_url: str = "https://integrate.api.nvidia.com/v1"
+    nvidia_model: str = "meta/llama-3.1-8b-instruct"
+    ai_max_pool_size: int = 50
+    ai_retry_max: int = 2
+    ai_request_timeout_seconds: float = 30.0
+    ai_generation_max_per_window: int = 10
+    ai_generation_window_seconds: int = 3600
+
     # Private document storage (filesystem for local/dev; object storage in prod).
     uploads_dir: str = "var/uploads"
     upload_max_bytes: int = 10 * 1024 * 1024  # 10 MiB

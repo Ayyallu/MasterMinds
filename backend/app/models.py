@@ -620,6 +620,10 @@ class QuestionVersion(Base):
     approved_by_user_id: Mapped[int | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
+    # Provenance: set when this version originated from an AI generation job.
+    generation_job_id: Mapped[int | None] = mapped_column(
+        ForeignKey("generation_jobs.id", ondelete="SET NULL"), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, nullable=False
     )
@@ -648,6 +652,49 @@ class QuestionOption(Base):
     order_index: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
     version: Mapped["QuestionVersion"] = relationship(back_populates="options")
+
+
+class GenerationStatus(str, enum.Enum):
+    pending = "pending"
+    running = "running"
+    completed = "completed"
+    failed = "failed"
+
+
+class GenerationJob(Base):
+    __tablename__ = "generation_jobs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    # Null institution_id = a platform-global generation job.
+    institution_id: Mapped[int | None] = mapped_column(
+        ForeignKey("institutions.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    is_global: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    requested_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    provider: Mapped[str] = mapped_column(String(32), nullable=False)
+    model: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    status: Mapped[str] = mapped_column(
+        String(16), default=GenerationStatus.pending.value, nullable=False, index=True
+    )
+    params: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    # Idempotency key dedupes repeated submits of the same batch.
+    idempotency_key: Mapped[str | None] = mapped_column(
+        String(64), unique=True, nullable=True, index=True
+    )
+    requested_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    stored_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    rejected_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    duplicate_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    usage: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    error: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+    finished_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
 
 class AuditEvent(Base):

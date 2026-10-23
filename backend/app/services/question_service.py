@@ -169,6 +169,56 @@ async def review_version(
     return v
 
 
+async def review_global_version(
+    session: AsyncSession, version_id: int, reviewer_id: int, approve: bool
+) -> QuestionVersion:
+    """Central Academic Reviewer gate for the platform-global shared library."""
+    v = await session.get(QuestionVersion, version_id)
+    if v is None:
+        raise AuthError("Version not found", 404)
+    q = await session.get(Question, v.question_id)
+    if q is None or not q.is_global:
+        raise AuthError("Not a global question", 400)
+    if v.status != QuestionStatus.in_review.value:
+        raise AuthError("Version is not awaiting review", 400)
+    if approve:
+        v.status = QuestionStatus.approved.value
+        v.approved_by_user_id = reviewer_id
+        v.approved_at = _utcnow()
+    else:
+        v.status = QuestionStatus.rejected.value
+    await record_audit(
+        session,
+        "global_question.reviewed",
+        actor_user_id=reviewer_id,
+        target=str(v.question_id),
+        detail={"version_id": version_id, "approved": approve},
+    )
+    return v
+
+
+async def search_global(session: AsyncSession, filters) -> list[QuestionVersion]:
+    """Approved global questions available for cross-institution reuse.
+
+    Private questions are never included; global questions carry no source
+    institution, so no tenant metadata is exposed."""
+    stmt = (
+        select(QuestionVersion)
+        .join(Question, Question.id == QuestionVersion.question_id)
+        .where(
+            Question.is_global.is_(True),
+            Question.withdrawn.is_(False),
+            QuestionVersion.status == QuestionStatus.approved.value,
+        )
+    )
+    if filters.type is not None:
+        stmt = stmt.where(QuestionVersion.type == filters.type.value)
+    if filters.difficulty is not None:
+        stmt = stmt.where(QuestionVersion.difficulty == filters.difficulty.value)
+    res = await session.execute(stmt.order_by(QuestionVersion.id))
+    return list(res.scalars().all())
+
+
 async def list_versions(
     session: AsyncSession, institution_id: int, question_id: int
 ) -> list[QuestionVersion]:
