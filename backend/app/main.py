@@ -16,11 +16,20 @@ settings = get_settings()
 app = FastAPI(title="MasterMinds API", version="0.1.0")
 
 # Explicit origin only. allow_credentials with a wildcard origin is invalid and
-# must never be configured.
+# must never be configured. Config validation already rejects "*", but guard
+# here too so the insecure combination can never reach the middleware.
+_allow_credentials = True
+_cors_origins = [settings.frontend_origin]
+if _allow_credentials and "*" in _cors_origins:
+    raise RuntimeError(
+        "CORS misconfiguration: allow_credentials=True cannot be combined "
+        "with a wildcard origin."
+    )
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.frontend_origin],
-    allow_credentials=True,
+    allow_origins=_cors_origins,
+    allow_credentials=_allow_credentials,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -35,7 +44,13 @@ async def _check_database() -> bool:
     try:
         await asyncio.wait_for(_probe(), timeout=settings.health_db_timeout_seconds)
         return True
-    except (asyncio.TimeoutError, Exception):  # noqa: BLE001
+    except asyncio.TimeoutError:
+        logger.warning(
+            "Database readiness probe timed out after %ss",
+            settings.health_db_timeout_seconds,
+        )
+        return False
+    except Exception:  # noqa: BLE001
         # Log server-side; never leak driver/internal details to the client.
         logger.warning("Database readiness probe failed", exc_info=True)
         return False

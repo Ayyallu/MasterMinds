@@ -1,5 +1,6 @@
 from functools import lru_cache
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -27,6 +28,18 @@ class Settings(BaseSettings):
     health_db_timeout_seconds: float = 3.0
 
     environment: str = "development"
+
+    @field_validator("frontend_origin")
+    @classmethod
+    def _no_wildcard_origin(cls, value: str) -> str:
+        # Credentials are always allowed on the CORS middleware, so a wildcard
+        # origin would be both invalid and insecure. Reject it explicitly.
+        if value.strip() == "*":
+            raise ValueError(
+                "frontend_origin must be an explicit origin, not '*', "
+                "because CORS credentials are enabled."
+            )
+        return value
 
 
 @lru_cache

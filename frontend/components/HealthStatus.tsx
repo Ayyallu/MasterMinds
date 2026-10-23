@@ -1,37 +1,99 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
-const POLL_INTERVAL_MS = 10_000;
+
+const BASE_INTERVAL_MS = 10_000;
+const MAX_INTERVAL_MS = 60_000;
+const REQUEST_TIMEOUT_MS = 5_000;
 
 type Status = "checking" | "ok" | "unavailable";
 
 export default function HealthStatus() {
   const [status, setStatus] = useState<Status>("checking");
 
+  // Mutable refs so the single polling loop can read current state without
+  // being re-created on every change.
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const inFlightRef = useRef<AbortController | null>(null);
+  const failuresRef = useRef(0);
+  const mountedRef = useRef(true);
+
   useEffect(() => {
-    let active = true;
+    mountedRef.current = true;
+
+    const clearTimer = () => {
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
+    };
+
+    const scheduleNext = () => {
+      clearTimer();
+      if (document.hidden) return; // don't poll while the tab is hidden
+      // Exponential backoff on consecutive failures, capped.
+      const backoff = Math.min(
+        BASE_INTERVAL_MS * 2 ** Math.max(0, failuresRef.current - 1),
+        MAX_INTERVAL_MS,
+      );
+      const delay = failuresRef.current > 0 ? backoff : BASE_INTERVAL_MS;
+      timerRef.current = setTimeout(poll, delay);
+    };
 
     async function poll() {
+      // Prevent overlapping requests: abort nothing, just skip if one is live.
+      if (inFlightRef.current) return;
+      if (document.hidden) return;
+
+      const controller = new AbortController();
+      inFlightRef.current = controller;
+      const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
       try {
-        const resp = await fetch(`${API_BASE_URL}/health`);
-        const data = await resp.json();
-        if (active) {
-          setStatus(resp.ok && data.status === "ok" ? "ok" : "unavailable");
+        const resp = await fetch(`${API_BASE_URL}/health`, {
+          signal: controller.signal,
+        });
+        const data = await resp.json().catch(() => null);
+        if (!mountedRef.current) return;
+        if (resp.ok && data?.status === "ok") {
+          failuresRef.current = 0;
+          setStatus("ok");
+        } else {
+          failuresRef.current += 1;
+          setStatus("unavailable");
         }
       } catch {
-        if (active) setStatus("unavailable");
+        if (!mountedRef.current) return;
+        failuresRef.current += 1;
+        setStatus("unavailable");
+      } finally {
+        clearTimeout(timeout);
+        inFlightRef.current = null;
+        if (mountedRef.current) scheduleNext();
       }
     }
 
+    const onVisibility = () => {
+      if (document.hidden) {
+        clearTimer();
+      } else {
+        // Refresh immediately when the tab becomes visible again.
+        poll();
+      }
+    };
+
+    document.addEventListener("visibilitychange", onVisibility);
     poll();
-    const timer = setInterval(poll, POLL_INTERVAL_MS);
 
     return () => {
-      active = false;
-      clearInterval(timer);
+      mountedRef.current = false;
+      document.removeEventListener("visibilitychange", onVisibility);
+      clearTimer();
+      inFlightRef.current?.abort();
+      inFlightRef.current = null;
     };
   }, []);
 
