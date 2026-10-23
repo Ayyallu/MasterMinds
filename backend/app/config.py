@@ -29,6 +29,12 @@ class Settings(BaseSettings):
 
     environment: str = "development"
 
+    # Async SQLAlchemy connection-pool sizing (tune per hosting model).
+    db_pool_size: int = 5
+    db_max_overflow: int = 10
+    db_pool_timeout_seconds: int = 30
+    db_pool_recycle_seconds: int = 1800
+
     # --- Auth / security ---
     # JWT signing secret for access tokens. The default is a development-only
     # value and is rejected at startup when environment == "production".

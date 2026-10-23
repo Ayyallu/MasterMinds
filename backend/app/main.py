@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -24,7 +25,16 @@ settings = get_settings()
 # Reject insecure development defaults when running in production.
 settings.validate_production_secrets()
 
-app = FastAPI(title="MasterMinds API", version="0.1.0")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup: nothing to warm; migrations run as a release step, not here.
+    yield
+    # Graceful shutdown: drain the connection pool.
+    await engine.dispose()
+
+
+app = FastAPI(title="MasterMinds API", version="0.1.0", lifespan=lifespan)
 
 # Explicit origin only. allow_credentials with a wildcard origin is invalid and
 # must never be configured. Config validation already rejects "*", but guard
