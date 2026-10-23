@@ -769,6 +769,84 @@ class ExamQuestion(Base):
     exam: Mapped["Exam"] = relationship(back_populates="questions")
 
 
+class AttemptStatus(str, enum.Enum):
+    in_progress = "in_progress"
+    submitted = "submitted"
+    expired = "expired"
+
+
+class ExamAttempt(Base):
+    __tablename__ = "exam_attempts"
+    __table_args__ = (
+        UniqueConstraint(
+            "exam_id", "student_user_id", "attempt_no", name="uq_attempt_no"
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    exam_id: Mapped[int] = mapped_column(
+        ForeignKey("exams.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    institution_id: Mapped[int] = mapped_column(
+        ForeignKey("institutions.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    student_user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    attempt_no: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(16), default=AttemptStatus.in_progress.value, nullable=False, index=True
+    )
+    # Immutable snapshot: ordered question version ids + per-attempt option order
+    # + marks/blueprint/marking rules. Answer keys are NOT stored here.
+    snapshot: Mapped[dict] = mapped_column(JSON, nullable=False)
+    started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+    deadline_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    submitted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    auto_submitted: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+
+    answers: Mapped[list["AttemptAnswer"]] = relationship(
+        back_populates="attempt", cascade="all, delete-orphan"
+    )
+
+
+class AttemptAnswer(Base):
+    __tablename__ = "attempt_answers"
+    __table_args__ = (
+        UniqueConstraint(
+            "attempt_id", "question_version_id", name="uq_attempt_answer"
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    attempt_id: Mapped[int] = mapped_column(
+        ForeignKey("exam_attempts.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    question_version_id: Mapped[int] = mapped_column(
+        ForeignKey("question_versions.id", ondelete="RESTRICT"), nullable=False
+    )
+    # Answer payload: {"selected_option_ids": [...]} or {"numerical_value": "x"}.
+    answer: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    # Monotonic server-side counter for idempotent/concurrent autosave.
+    answer_version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow, nullable=False
+    )
+
+    attempt: Mapped["ExamAttempt"] = relationship(back_populates="answers")
+
+
 class GenerationStatus(str, enum.Enum):
     pending = "pending"
     running = "running"

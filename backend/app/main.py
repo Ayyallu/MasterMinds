@@ -12,6 +12,7 @@ from app.routers import academic as academic_router
 from app.routers import auth as auth_router
 from app.routers import institutions as institutions_router
 from app.routers import ai as ai_router
+from app.routers import attempts as attempts_router
 from app.routers import exams as exams_router
 from app.routers import questions as questions_router
 
@@ -84,3 +85,4 @@ app.include_router(questions_router.router)
 app.include_router(ai_router.inst_router)
 app.include_router(ai_router.global_router)
 app.include_router(exams_router.router)
+app.include_router(attempts_router.router)
