@@ -82,6 +82,18 @@ export default function StudentAttemptPage() {
     setError(null);
     setSaveState(automatic ? "Time expired — submitting…" : "Submitting exam…");
     try {
+      // Flush the latest in-memory answers before submitting so a click just
+      // after a selection cannot race the debounced autosave.
+      for (const [questionId, answer] of Object.entries(answersRef.current)) {
+        try {
+          await api(`/attempts/${attemptId}/answers/${questionId}`, {
+            method: "PUT",
+            body: answer,
+          });
+        } catch (err) {
+          if (!automatic) throw err;
+        }
+      }
       const data = await api<Attempt>(`/attempts/${attemptId}/submit`, { method: "POST" });
       setAttempt(data);
       setRemaining(0);
@@ -97,16 +109,17 @@ export default function StudentAttemptPage() {
 
   useEffect(() => {
     if (!attempt || attempt.status !== "in_progress") return;
-    const timer = window.setInterval(() => {
-      setRemaining(previous => {
-        if (previous <= 1) {
-          window.clearInterval(timer);
-          void submitAttempt(true);
-          return 0;
-        }
-        return previous - 1;
-      });
-    }, 1000);
+    const deadlineMs = Date.parse(attempt.deadline_at);
+    const tick = () => {
+      const seconds = Math.max(0, Math.ceil((deadlineMs - Date.now()) / 1000));
+      setRemaining(seconds);
+      if (seconds <= 0) {
+        window.clearInterval(timer);
+        void submitAttempt(true);
+      }
+    };
+    const timer = window.setInterval(tick, 1000);
+    tick();
     return () => window.clearInterval(timer);
   }, [attempt, submitAttempt]);
 
@@ -134,7 +147,9 @@ export default function StudentAttemptPage() {
   }, [answers, attempt]);
 
   function setQuestionAnswer(questionId: number, answer: Answer) {
-    setAnswers(previous => ({ ...previous, [questionId]: answer }));
+    const next = { ...answersRef.current, [questionId]: answer };
+    answersRef.current = next;
+    setAnswers(next);
     setError(null);
   }
 
