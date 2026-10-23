@@ -8,10 +8,14 @@ from sqlalchemy import text
 
 from app.config import get_settings
 from app.db import engine
+from app.routers import auth as auth_router
 
 logger = logging.getLogger("masterminds")
 
 settings = get_settings()
+
+# Reject insecure development defaults when running in production.
+settings.validate_production_secrets()
 
 app = FastAPI(title="MasterMinds API", version="0.1.0")
 
@@ -65,3 +69,6 @@ async def health() -> JSONResponse:
         status_code=code,
         content={"status": status, "database": "up" if db_ok else "down"},
     )
+
+
+app.include_router(auth_router.router)
