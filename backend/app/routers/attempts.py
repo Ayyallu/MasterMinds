@@ -138,6 +138,7 @@ async def list_student_exams(
                 ExamStatus.closed.value,
                 ExamStatus.results_pending.value,
                 ExamStatus.published.value,
+                ExamStatus.archived.value,
             ]),
         )
         .order_by(Exam.start_at.desc(), Exam.id.desc())
