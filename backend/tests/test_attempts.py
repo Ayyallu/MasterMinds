@@ -226,3 +226,33 @@ async def test_single_answer_rejects_multiple(client, delivery_env):
         json={"selected_option_ids": two}, headers=sh,
     )
     assert r.status_code == 400
+
+
+async def test_student_exam_listing_shows_eligible_exam_and_attempt_state(client, delivery_env):
+    inst, eid = delivery_env
+    sh = await _headers(client, "student@example.com")
+
+    listing = await client.get("/student/exams", headers=sh)
+    assert listing.status_code == 200, listing.text
+    exams = listing.json()
+    exam = next(row for row in exams if row["id"] == eid)
+    assert exam["title"] == "Final"
+    assert exam["can_start"] is True
+    assert exam["attempts"] == []
+
+    started = await client.post(f"/exams/{eid}/attempts/start", headers=sh)
+    assert started.status_code == 200
+    refreshed = await client.get("/student/exams", headers=sh)
+    exam_after_start = next(row for row in refreshed.json() if row["id"] == eid)
+    assert exam_after_start["attempts"][0]["id"] == started.json()["id"]
+    assert exam_after_start["attempts"][0]["status"] == "in_progress"
+
+
+async def test_non_student_cannot_use_student_attempt_routes(client, delivery_env):
+    inst, eid = delivery_env
+    admin_headers = await _headers(client, "deladmin@example.com")
+
+    start = await client.post(f"/exams/{eid}/attempts/start", headers=admin_headers)
+    assert start.status_code == 403
+    listing = await client.get("/student/exams", headers=admin_headers)
+    assert listing.status_code == 403
