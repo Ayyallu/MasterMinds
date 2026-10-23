@@ -654,6 +654,121 @@ class QuestionOption(Base):
     version: Mapped["QuestionVersion"] = relationship(back_populates="options")
 
 
+class ExamStatus(str, enum.Enum):
+    draft = "draft"
+    awaiting_approval = "awaiting_approval"
+    approved = "approved"
+    scheduled = "scheduled"
+    live = "live"
+    closed = "closed"
+    results_pending = "results_pending"
+    published = "published"
+    archived = "archived"
+    cancelled = "cancelled"
+
+
+class ResultReleaseRule(str, enum.Enum):
+    manual = "manual"
+    after_close = "after_close"
+
+
+class Exam(Base):
+    __tablename__ = "exams"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    institution_id: Mapped[int] = mapped_column(
+        ForeignKey("institutions.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    created_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    status: Mapped[str] = mapped_column(
+        String(24), default=ExamStatus.draft.value, nullable=False, index=True
+    )
+
+    # Cohort / syllabus scope
+    course_id: Mapped[int | None] = mapped_column(
+        ForeignKey("courses.id", ondelete="SET NULL"), nullable=True
+    )
+    grade_level_id: Mapped[int | None] = mapped_column(
+        ForeignKey("grade_levels.id", ondelete="SET NULL"), nullable=True
+    )
+    term_id: Mapped[int | None] = mapped_column(
+        ForeignKey("terms.id", ondelete="SET NULL"), nullable=True
+    )
+    class_group_id: Mapped[int | None] = mapped_column(
+        ForeignKey("class_groups.id", ondelete="SET NULL"), nullable=True
+    )
+
+    # Blueprint
+    num_questions: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    duration_minutes: Mapped[int] = mapped_column(Integer, default=60, nullable=False)
+    attempt_limit: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    # Distribution: list of {type, difficulty?, topic_id?, count}
+    distribution: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    randomize: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    late_entry_minutes: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    negative_marking: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False
+    )
+    result_release_rule: Mapped[str] = mapped_column(
+        String(16), default=ResultReleaseRule.manual.value, nullable=False
+    )
+
+    # Scheduling: timestamps stored in UTC; display zone kept separately.
+    timezone: Mapped[str] = mapped_column(String(64), default="UTC", nullable=False)
+    start_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    end_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    # Freeze on approval
+    frozen: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    frozen_snapshot: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    approved_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    approved_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow, nullable=False
+    )
+
+    questions: Mapped[list["ExamQuestion"]] = relationship(
+        back_populates="exam", cascade="all, delete-orphan"
+    )
+
+
+class ExamQuestion(Base):
+    """A pinned approved question version selected into an exam's pool."""
+
+    __tablename__ = "exam_questions"
+    __table_args__ = (
+        UniqueConstraint(
+            "exam_id", "question_version_id", name="uq_exam_question_version"
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    exam_id: Mapped[int] = mapped_column(
+        ForeignKey("exams.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    question_version_id: Mapped[int] = mapped_column(
+        ForeignKey("question_versions.id", ondelete="RESTRICT"), nullable=False
+    )
+    order_index: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
+    exam: Mapped["Exam"] = relationship(back_populates="questions")
+
+
 class GenerationStatus(str, enum.Enum):
     pending = "pending"
     running = "running"
