@@ -1,0 +1,15 @@
+# Local development Postgres only. Not a production configuration.
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: masterminds
+      POSTGRES_PASSWORD: masterminds
+      POSTGRES_DB: masterminds
+    ports:
+      - "5432:5432"
+    volumes:
+      - masterminds_pgdata:/var/lib/postgresql/data
+
+volumes:
+  masterminds_pgdata:
