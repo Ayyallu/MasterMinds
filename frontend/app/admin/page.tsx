@@ -111,6 +111,7 @@ function LoginForm({
         <div style={{ marginBottom: 8 }}>
           <input
             type="email"
+            aria-label="Email"
             placeholder="Email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
@@ -120,6 +121,7 @@ function LoginForm({
         <div style={{ marginBottom: 8 }}>
           <input
             type="password"
+            aria-label="Password"
             placeholder="Password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
@@ -234,6 +236,7 @@ function InstitutionAdmin({ institutionIds }: { institutionIds: number[] }) {
       <h2>Classes / sections / batches</h2>
       <form onSubmit={addClassGroup} style={card}>
         <input
+          aria-label="Class group name"
           placeholder="Class group name"
           value={name}
           onChange={(e) => setName(e.target.value)}

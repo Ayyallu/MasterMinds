@@ -15,6 +15,9 @@ from app.models import (
 )
 from app.services.auth_service import AuthError, record_audit
 
+# Upper bound on rows returned by a single search call (hardening).
+MAX_SEARCH_ROWS = 2000
+
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
@@ -215,7 +218,7 @@ async def search_global(session: AsyncSession, filters) -> list[QuestionVersion]
         stmt = stmt.where(QuestionVersion.type == filters.type.value)
     if filters.difficulty is not None:
         stmt = stmt.where(QuestionVersion.difficulty == filters.difficulty.value)
-    res = await session.execute(stmt.order_by(QuestionVersion.id))
+    res = await session.execute(stmt.order_by(QuestionVersion.id).limit(MAX_SEARCH_ROWS))
     return list(res.scalars().all())
 
 
@@ -255,7 +258,8 @@ async def search(
         stmt = stmt.where(QuestionVersion.difficulty == filters.difficulty.value)
     if filters.status is not None:
         stmt = stmt.where(QuestionVersion.status == filters.status)
-    res = await session.execute(stmt.order_by(QuestionVersion.id))
+    # Bound result sets so a large question bank cannot be dumped in one call.
+    res = await session.execute(stmt.order_by(QuestionVersion.id).limit(MAX_SEARCH_ROWS))
     return list(res.scalars().all())
 
 

@@ -24,7 +24,9 @@ def hash_password(password: str) -> str:
 def verify_password(password: str, hashed: str) -> bool:
     try:
         return _ph.verify(hashed, password)
-    except (VerifyMismatchError, Exception):  # noqa: BLE001
+    except VerifyMismatchError:
+        return False
+    except Exception:  # malformed/legacy hash — treat as a failed verification
         return False
 
 
