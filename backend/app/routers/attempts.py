@@ -24,12 +24,18 @@ def _err(exc: AuthError) -> HTTPException:
     return HTTPException(status_code=exc.status_code, detail=exc.message)
 
 
+def _require_student(current: CurrentUser) -> None:
+    if "student" not in current.roles:
+        raise HTTPException(status_code=403, detail="Student access required")
+
+
 @router.post("/exams/{exam_id}/attempts/start")
 async def start_attempt(
     exam_id: int,
     current: CurrentUser = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
+    _require_student(current)
     try:
         attempt = await attempt_service.start_or_resume(session, current, exam_id)
     except AuthError as exc:
@@ -45,6 +51,7 @@ async def get_attempt(
     current: CurrentUser = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
+    _require_student(current)
     try:
         attempt = await attempt_service.get_view(session, current, attempt_id)
     except AuthError as exc:
@@ -62,6 +69,7 @@ async def save_answer(
     current: CurrentUser = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> AnswerSaved:
+    _require_student(current)
     try:
         row = await attempt_service.save_answer(
             session, current, attempt_id, question_version_id, payload
@@ -80,6 +88,7 @@ async def submit_attempt(
     current: CurrentUser = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
+    _require_student(current)
     try:
         attempt = await attempt_service.submit(session, current, attempt_id)
     except AuthError as exc:
