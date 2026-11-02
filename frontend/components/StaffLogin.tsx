@@ -43,7 +43,17 @@ export function StaffLogin({ onSignedIn }: { onSignedIn: () => void }) {
       setTotp("");
       onSignedIn();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Sign in failed.");
+      const message = err instanceof Error ? err.message : "Sign in failed.";
+      // The API intentionally returns 401 after validating the password when
+      // MFA is enabled but no TOTP code was supplied. Reveal the code field
+      // for that response so the user can retry without changing the API
+      // authentication contract or weakening password verification.
+      if (message.toLowerCase().includes("mfa code required")) {
+        setMfaNeeded(true);
+        setError("Enter your authenticator code to continue.");
+      } else {
+        setError(message);
+      }
     } finally {
       setBusy(false);
     }
