@@ -117,7 +117,13 @@ async def seed() -> None:
         for account, password in zip(ACCOUNTS, passwords):
             users.append(
                 await get_or_create_user(
-                    session, *account[:4], password, institution.id, account[3]
+                    session,
+                    account[0],
+                    account[1],
+                    account[2],
+                    password,
+                    institution.id,
+                    account[3],
                 )
             )
         admin, teacher, student = users
