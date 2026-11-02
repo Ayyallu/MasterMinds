@@ -2,7 +2,7 @@
 
 Set DEMO_ADMIN_PASSWORD, DEMO_TEACHER_PASSWORD and DEMO_STUDENT_PASSWORD
 before running: python -m scripts.seed_demo_data
-This script refuses to run when ENVIRONMENT=production.
+This script only runs when ENVIRONMENT=development.
 """
 from __future__ import annotations
 
