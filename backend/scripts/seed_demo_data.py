@@ -87,8 +87,8 @@ async def get_or_create_user(session, email: str, name: str, role_name: str, pas
 
 async def seed() -> None:
     settings = get_settings()
-    if settings.is_production:
-        raise SystemExit("Refusing to seed demo accounts in production.")
+    if settings.environment.lower() != "development":
+        raise SystemExit("Demo data can only be seeded when ENVIRONMENT=development.")
 
     passwords = [
         os.getenv("DEMO_ADMIN_PASSWORD", ""),
