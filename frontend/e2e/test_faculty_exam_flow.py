@@ -141,7 +141,7 @@ def test_faculty_creates_exam_admin_schedules_and_student_can_start(page: Page) 
     page.get_by_label("Password").fill("Automation-Only-Password")
     page.get_by_role("button", name="Sign in").click()
     expect(page.get_by_text("Automation Faculty")).to_be_visible()
-    page.get_by_role("link", name="Exams").click()
+    page.get_by_role("link", name="Exams", exact=True).click()
     page.get_by_role("button", name="Create exam").click()
     page.get_by_label("Exam title").fill("Faculty-created Mathematics Assessment")
     expect(page.get_by_label("Target class group")).to_have_value("770")
@@ -150,7 +150,7 @@ def test_faculty_creates_exam_admin_schedules_and_student_can_start(page: Page) 
     expect(page.get_by_role("heading", name="Faculty-created Mathematics Assessment")).to_be_visible()
     expect(page.get_by_text("Draft", exact=True)).to_be_visible()
     page.get_by_role("button", name="Submit for approval").click()
-    expect(page.get_by_text("Awaiting approval", exact=True)).to_be_visible()
+    expect(page.get_by_text("Awaiting Approval", exact=True)).to_be_visible()
     assert state["created_payload"] == {
         "title": "Faculty-created Mathematics Assessment",
         "class_group_id": 770,
@@ -164,7 +164,7 @@ def test_faculty_creates_exam_admin_schedules_and_student_can_start(page: Page) 
     }
 
     # Institution Admin approves and schedules the submitted exam.
-    admin = page.context.new_page()
+    admin = page.context.browser.new_context().new_page()
     admin.route(f"{API_ORIGIN}/**", mock_api)
     admin.goto(f"{BASE_URL}/admin")
     admin.get_by_label("Email").fill("admin@demo.example.com")
@@ -182,7 +182,7 @@ def test_faculty_creates_exam_admin_schedules_and_student_can_start(page: Page) 
     assert state["scheduled"] is True
 
     # Student sees the scheduled assessment and can launch an attempt.
-    student = page.context.new_page()
+    student = page.context.browser.new_context().new_page()
     student.route(f"{API_ORIGIN}/**", mock_api)
     student.goto(f"{BASE_URL}/student")
     student.get_by_label("Institution code").fill("DEMO01")
