@@ -49,7 +49,7 @@ $env:DEMO_STUDENT_PASSWORD = "use-a-third-unique-password"
 python -m scripts.seed_demo_data
 ```
 
-The seed command refuses to run when `ENVIRONMENT=production`. It is idempotent for the demo institution and existing accounts; existing account passwords are not overwritten. Synthetic credentials:
+The seed command refuses to run unless `ENVIRONMENT=development`. It is idempotent for the demo institution and existing accounts; existing account passwords are not overwritten. Synthetic credentials:
 
 | Role | Email | Student register number |
 |---|---|---|
