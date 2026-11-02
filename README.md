@@ -60,3 +60,59 @@ The seed command refuses to run unless `ENVIRONMENT=development`. It is idempote
 The demo Faculty account is assigned to `Grade 10 - Section A`; the sample questions are approved and can be used to create a draft exam. Use the local passwords supplied in the three environment variables above.
 
 For AI question generation, keep `AI_PROVIDER=mock` for a free deterministic local demo. No NVIDIA API key is needed unless you explicitly switch to `AI_PROVIDER=nvidia`.
+
+## Automated testing
+
+The automated test suite is split into two layers so browser checks do not replace
+real API/business-logic tests:
+
+- **Backend integration:** `backend/tests/test_e2e.py` exercises institution
+  onboarding, exam creation and scheduling, student attempt, answer submission,
+  scoring, result publication, and cross-institution access restrictions through
+  the FastAPI app. The test fixtures use an isolated in-memory SQLite database;
+  they do not connect to or modify your local demo PostgreSQL database.
+- **Browser E2E:** `frontend/e2e/test_student_exam_flow.py` uses Playwright to
+  sign in as a synthetic student, open an available exam, answer a question,
+  submit it, and verify the submitted screen. Its API responses are intercepted
+  by a deterministic test double, so it does not need real demo credentials or
+  write to any database.
+
+### Run locally on Windows PowerShell
+
+1. Install the backend test and browser dependencies:
+
+   ```powershell
+   cd backend
+   python -m pip install -r requirements.txt
+   python -m playwright install chromium
+   cd ..
+   ```
+
+2. Run backend API/integration tests:
+
+   ```powershell
+   cd backend
+   python -m pytest -q
+   cd ..
+   ```
+
+3. In one terminal, start the frontend:
+
+   ```powershell
+   cd frontend
+   npm ci
+   npm run dev
+   ```
+
+4. In a second terminal, run the browser test:
+
+   ```powershell
+   python -m pytest frontend/e2e -q
+   ```
+
+   The browser test expects the frontend at `http://127.0.0.1:3000`.
+   Override it with `$env:PLAYWRIGHT_BASE_URL` if your local port differs.
+
+GitHub Actions runs the backend tests, frontend quality/build checks, and the
+Playwright browser journey as separate jobs on pull requests to `main`.
+Browser automation is test-only; it does not deploy the application.
