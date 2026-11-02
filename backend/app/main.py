@@ -15,6 +15,7 @@ from app.routers import institutions as institutions_router
 from app.routers import ai as ai_router
 from app.routers import attempts as attempts_router
 from app.routers import scoring as scoring_router
+from app.routers import teacher_assignments as teacher_assignments_router
 from app.routers import exams as exams_router
 from app.routers import questions as questions_router
 
@@ -100,3 +101,4 @@ app.include_router(attempts_router.router)
 app.include_router(scoring_router.router)
 app.include_router(scoring_router.student_router)
 app.include_router(scoring_router.platform_router)
+app.include_router(teacher_assignments_router.router)

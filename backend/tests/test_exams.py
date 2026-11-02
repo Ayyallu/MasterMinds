@@ -265,3 +265,37 @@ async def test_global_approved_questions_fill_pool(client, factory, sessionmaker
         f"/institutions/{inst.id}/exams/{eid}/approve", headers=admin
     )
     assert appr.status_code == 200 and appr.json()["num_questions"] == 2
+
+
+
+async def test_exam_class_group_lookup_is_scoped_to_teacher_assignments(client, exam_env, sessionmaker):
+    inst, assigned_group_id = exam_env
+    async with sessionmaker() as session:
+        other = ClassGroup(
+            institution_id=inst.id,
+            name="Unassigned Class",
+            kind="class",
+        )
+        session.add(other)
+        await session.commit()
+        other_id = other.id
+
+    teacher = await _headers(client, "exteacher@example.com")
+    response = await client.get(
+        f"/institutions/{inst.id}/class-groups/available-for-exam",
+        headers=teacher,
+    )
+    assert response.status_code == 200
+    assert [row["id"] for row in response.json()] == [assigned_group_id]
+    assert other_id not in [row["id"] for row in response.json()]
+
+    admin = await _headers(client, "exadmin@example.com")
+    admin_response = await client.get(
+        f"/institutions/{inst.id}/class-groups/available-for-exam",
+        headers=admin,
+    )
+    assert admin_response.status_code == 200
+    assert {row["id"] for row in admin_response.json()} == {
+        assigned_group_id,
+        other_id,
+    }
