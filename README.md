@@ -53,9 +53,9 @@ The seed command refuses to run unless `ENVIRONMENT=development`. It is idempote
 
 | Role | Email | Student register number |
 |---|---|---|
-| Institution Admin | `admin@demo.masterminds.local` | — |
-| Faculty | `teacher@demo.masterminds.local` | — |
-| Student | `student@demo.masterminds.local` | `MM-DEMO-001` |
+| Institution Admin | `admin@demo.example.com` | — |
+| Faculty | `teacher@demo.example.com` | — |
+| Student | `student@demo.example.com` | `MM-DEMO-001` |
 
 The demo Faculty account is assigned to `Grade 10 - Section A`; the sample questions are approved and can be used to create a draft exam. Use the local passwords supplied in the three environment variables above.
 
