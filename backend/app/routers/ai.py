@@ -157,7 +157,7 @@ async def review_global(
 @global_router.post("/library/search")
 async def search_global_library(
     filters: QuestionSearch,
-    _: CurrentUser = Depends(
+    current: CurrentUser = Depends(
         require_roles(
             RoleName.institution_admin,
             RoleName.teacher,
@@ -166,7 +166,13 @@ async def search_global_library(
     ),
     session: AsyncSession = Depends(get_session),
 ):
-    versions = await question_service.search_global(session, filters)
+    can_review = (
+        RoleName.central_academic_reviewer.value in current.roles
+        or current.is_super_admin
+    )
+    versions = await question_service.search_global(
+        session, filters, can_review=can_review
+    )
     out = []
     for v in versions:
         opts = await question_service.load_options(session, v.id)
