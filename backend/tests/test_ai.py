@@ -211,27 +211,21 @@ async def test_global_generation_and_central_review(client, factory):
     assert gen.status_code == 201
     assert gen.json()["is_global"] is True
 
-    # Before approval the global library is empty.
-    pre = await client.post("/global/library/search", json={}, headers=rev)
-    assert pre.json() == []
+    # Central reviewers can see generated candidates in the review queue.
+    pre = await client.post("/global/library/search", json={"status": "in_review"}, headers=rev)
+    candidates = pre.json()
+    assert len(candidates) == 2
+    assert all(row["status"] == "in_review" for row in candidates)
 
-    # Find the generated version ids and approve them.
-    from sqlalchemy import select
-    from app.models import Question, QuestionVersion
-
-    # Reviewer approves via endpoint (needs version ids): search in_review not
-    # exposed globally, so approve by iterating known ids 1..N via DB isn't
-    # available here; instead approve through the library once approved. We
-    # approve by scanning versions through a staff-independent path:
-    # use the review endpoint with ids discovered from a fresh listing.
-    # (Version ids are sequential starting at 1 in a fresh test DB.)
-    for vid in (1, 2):
+    # Review the exact returned version ids; no assumptions about sequence IDs.
+    for candidate in candidates:
         r = await client.post(
-            f"/global/questions/versions/{vid}/review?approve=true", headers=rev
+            f"/global/questions/versions/{candidate['version_id']}/review?approve=true",
+            headers=rev,
         )
         assert r.status_code == 200
 
-    post = await client.post("/global/library/search", json={}, headers=rev)
+    post = await client.post("/global/library/search", json={"status": "approved"}, headers=rev)
     assert len(post.json()) == 2
 
 
@@ -264,3 +258,36 @@ async def test_private_questions_not_in_global_library(client, inst_staff, facto
     # The approved private question must NOT appear in the global library.
     lib = await client.post("/global/library/search", json={}, headers=teacher)
     assert lib.json() == []
+
+
+
+async def test_global_in_review_candidates_hidden_from_institution_staff(client, factory):
+    await factory.user(
+        email="reviewer2@example.com", role=RoleName.central_academic_reviewer
+    )
+    reviewer = await _headers(client, "reviewer2@example.com")
+    generated = await client.post(
+        "/global/ai/generate",
+        json={"question_type": "single_mcq", "count": 1},
+        headers=reviewer,
+    )
+    assert generated.status_code == 201
+    candidate = await client.post(
+        "/global/library/search",
+        json={"status": "in_review"},
+        headers=reviewer,
+    )
+    assert len(candidate.json()) == 1
+
+    inst = await factory.institution("AIG")
+    await factory.user(
+        email="aigteacher@example.com", role=RoleName.teacher, institution=inst
+    )
+    teacher = await _headers(client, "aigteacher@example.com")
+    hidden = await client.post(
+        "/global/library/search",
+        json={"status": "in_review"},
+        headers=teacher,
+    )
+    assert hidden.status_code == 200
+    assert hidden.json() == []
