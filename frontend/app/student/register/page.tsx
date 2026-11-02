@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useState } from "react";
 import { api } from "@/lib/api";
-import "../student.css";
+import { AuthLayout } from "@/components/AuthLayout";
+import { Alert, Button, Field, Input } from "@/components/ui";
 
 export default function StudentRegistrationPage() {
   const [institutionCode, setInstitutionCode] = useState("");
@@ -41,46 +42,49 @@ export default function StudentRegistrationPage() {
   }
 
   return (
-    <main className="student-shell">
-      <div className="student-topbar">
-        <Link className="student-brand" href="/">MasterMinds</Link>
-        <Link className="student-button secondary" href="/student">Student sign in</Link>
-      </div>
-      <section className="student-card" style={{ maxWidth: 620, margin: "3vh auto" }}>
-        <p className="student-pill">STUDENT REGISTRATION</p>
-        <h1>Create your student account</h1>
-        {submitted ? (
-          <div className="student-success" role="status">
-            <strong>Registration received.</strong>
-            <p>Your account is pending approval by your school or college administrator. You can sign in after it has been approved.</p>
-            <Link href="/student">Go to student sign in</Link>
-          </div>
-        ) : (
-          <>
-            <p className="student-muted">Use the institution code and register number provided by your institution. Your account will remain pending until an administrator approves it.</p>
-            <form className="student-form" onSubmit={submit}>
-              <label className="student-label">Institution code
-                <input className="student-input" required value={institutionCode} onChange={e => setInstitutionCode(e.target.value)} autoComplete="organization" />
-              </label>
-              <label className="student-label">Register number
-                <input className="student-input" required value={registerNumber} onChange={e => setRegisterNumber(e.target.value)} autoComplete="username" />
-              </label>
-              <label className="student-label">Full name
-                <input className="student-input" required maxLength={255} value={fullName} onChange={e => setFullName(e.target.value)} autoComplete="name" />
-              </label>
-              <label className="student-label">Email (optional)
-                <input className="student-input" type="email" value={email} onChange={e => setEmail(e.target.value)} autoComplete="email" />
-              </label>
-              <label className="student-label">Password
-                <input className="student-input" type="password" minLength={8} required value={password} onChange={e => setPassword(e.target.value)} autoComplete="new-password" />
-                <span className="student-muted" style={{ fontWeight: 400 }}>Use at least 8 characters.</span>
-              </label>
-              {error && <p className="student-error" role="alert">{error}</p>}
-              <button className="student-button" type="submit" disabled={busy}>{busy ? "Submitting…" : "Submit for approval"}</button>
-            </form>
-          </>
-        )}
-      </section>
-    </main>
+    <AuthLayout
+      eyebrow="Student registration"
+      title="Create your student account"
+      subtitle="Use the institution code and register number provided by your institution."
+      footer={
+        <>
+          Already registered? <Link href="/student">Sign in</Link>
+        </>
+      }
+    >
+      {submitted ? (
+        <div className="stack gap-4">
+          <Alert tone="success">
+            <strong>Registration received.</strong> Your account is pending approval by your school or
+            college administrator. You can sign in once it has been approved.
+          </Alert>
+          <Link href="/student" className="btn btn-primary btn-block">
+            Go to student sign in
+          </Link>
+        </div>
+      ) : (
+        <form className="stack gap-4" onSubmit={submit}>
+          <Field label="Institution code">
+            <Input required value={institutionCode} onChange={(e) => setInstitutionCode(e.target.value)} autoComplete="organization" aria-label="Institution code" />
+          </Field>
+          <Field label="Register number">
+            <Input required value={registerNumber} onChange={(e) => setRegisterNumber(e.target.value)} autoComplete="username" aria-label="Register number" />
+          </Field>
+          <Field label="Full name">
+            <Input required maxLength={255} value={fullName} onChange={(e) => setFullName(e.target.value)} autoComplete="name" aria-label="Full name" />
+          </Field>
+          <Field label="Email (optional)">
+            <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" aria-label="Email" />
+          </Field>
+          <Field label="Password" hint="Use at least 8 characters.">
+            <Input type="password" minLength={8} required value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" aria-label="Password" />
+          </Field>
+          {error && <Alert tone="error">{error}</Alert>}
+          <Button type="submit" block size="lg" loading={busy}>
+            Submit for approval
+          </Button>
+        </form>
+      )}
+    </AuthLayout>
   );
 }

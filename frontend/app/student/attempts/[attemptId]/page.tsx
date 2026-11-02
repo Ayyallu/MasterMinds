@@ -4,7 +4,9 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { api, clearTokens, getToken } from "@/lib/api";
-import "../../student.css";
+import { Icon } from "@/components/icons";
+import { Alert, Badge, Button, Card, ConfirmDialog, LoadingState, Spinner } from "@/components/ui";
+import "../../exam.css";
 
 type Question = {
   question_version_id: number;
@@ -28,9 +30,20 @@ type Attempt = {
 type Answer = { selected_option_ids?: number[]; numerical_value?: string };
 
 function formatTime(seconds: number) {
-  const mins = Math.floor(Math.max(0, seconds) / 60).toString().padStart(2, "0");
-  const secs = (Math.max(0, seconds) % 60).toString().padStart(2, "0");
-  return `${mins}:${secs}`;
+  const s = Math.max(0, seconds);
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  const mm = m.toString().padStart(2, "0");
+  const ss = sec.toString().padStart(2, "0");
+  return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
+}
+
+function isAnswered(a: Answer | undefined): boolean {
+  if (!a) return false;
+  if (a.selected_option_ids && a.selected_option_ids.length > 0) return true;
+  if (a.numerical_value != null && a.numerical_value.trim() !== "") return true;
+  return false;
 }
 
 export default function StudentAttemptPage() {
@@ -39,14 +52,18 @@ export default function StudentAttemptPage() {
   const [attempt, setAttempt] = useState<Attempt | null>(null);
   const [answers, setAnswers] = useState<Record<number, Answer>>({});
   const [remaining, setRemaining] = useState(0);
+  const [current, setCurrent] = useState(0);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [saveState, setSaveState] = useState("All changes saved");
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [saveState, setSaveState] = useState<"saved" | "saving" | "failed" | "submitting" | "submitted">("saved");
   const [error, setError] = useState<string | null>(null);
   const submittedRef = useRef(false);
   const answersRef = useRef<Record<number, Answer>>({});
 
-  useEffect(() => { answersRef.current = answers; }, [answers]);
+  useEffect(() => {
+    answersRef.current = answers;
+  }, [answers]);
 
   const loadAttempt = useCallback(async () => {
     if (!getToken()) {
@@ -73,39 +90,44 @@ export default function StudentAttemptPage() {
     }
   }, [attemptId]);
 
-  useEffect(() => { void loadAttempt(); }, [loadAttempt]);
+  useEffect(() => {
+    void loadAttempt();
+  }, [loadAttempt]);
 
-  const submitAttempt = useCallback(async (automatic = false) => {
-    if (submittedRef.current || submitting) return;
-    submittedRef.current = true;
-    setSubmitting(true);
-    setError(null);
-    setSaveState(automatic ? "Time expired — submitting…" : "Submitting exam…");
-    try {
-      // Flush the latest in-memory answers before submitting so a click just
-      // after a selection cannot race the debounced autosave.
-      for (const [questionId, answer] of Object.entries(answersRef.current)) {
-        try {
-          await api(`/attempts/${attemptId}/answers/${questionId}`, {
-            method: "PUT",
-            body: answer,
-          });
-        } catch (err) {
-          if (!automatic) throw err;
+  const submitAttempt = useCallback(
+    async (automatic = false) => {
+      if (submittedRef.current || submitting) return;
+      submittedRef.current = true;
+      setSubmitting(true);
+      setError(null);
+      setSaveState("submitting");
+      try {
+        // Flush the latest in-memory answers before submitting so a click just
+        // after a selection cannot race the debounced autosave.
+        for (const [questionId, answer] of Object.entries(answersRef.current)) {
+          try {
+            await api(`/attempts/${attemptId}/answers/${questionId}`, {
+              method: "PUT",
+              body: answer,
+            });
+          } catch (err) {
+            if (!automatic) throw err;
+          }
         }
+        const data = await api<Attempt>(`/attempts/${attemptId}/submit`, { method: "POST" });
+        setAttempt(data);
+        setRemaining(0);
+        setSaveState("submitted");
+      } catch (err) {
+        submittedRef.current = false;
+        setError(err instanceof Error ? err.message : "Submission failed. Please try again.");
+        setSaveState("failed");
+      } finally {
+        setSubmitting(false);
       }
-      const data = await api<Attempt>(`/attempts/${attemptId}/submit`, { method: "POST" });
-      setAttempt(data);
-      setRemaining(0);
-      setSaveState("Exam submitted");
-    } catch (err) {
-      submittedRef.current = false;
-      setError(err instanceof Error ? err.message : "Submission failed. Please try again.");
-      setSaveState("Submission needs attention");
-    } finally {
-      setSubmitting(false);
-    }
-  }, [attemptId, submitting]);
+    },
+    [attemptId, submitting],
+  );
 
   useEffect(() => {
     if (!attempt || attempt.status !== "in_progress") return;
@@ -127,7 +149,7 @@ export default function StudentAttemptPage() {
     if (!attempt || attempt.status !== "in_progress") return;
     const ids = Object.keys(answers);
     if (ids.length === 0) return;
-    setSaveState("Saving answers…");
+    setSaveState("saving");
     const timer = window.setTimeout(async () => {
       try {
         for (const key of ids) {
@@ -137,14 +159,25 @@ export default function StudentAttemptPage() {
             body: answers[questionId],
           });
         }
-        setSaveState("All changes saved");
+        setSaveState("saved");
       } catch (err) {
-        setSaveState("Save failed — check your connection");
+        setSaveState("failed");
         setError(err instanceof Error ? err.message : "Could not save an answer.");
       }
     }, 450);
     return () => window.clearTimeout(timer);
   }, [answers, attempt]);
+
+  // Guard against accidental navigation while the exam is in progress.
+  useEffect(() => {
+    if (!attempt || attempt.status !== "in_progress") return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [attempt]);
 
   function setQuestionAnswer(questionId: number, answer: Answer) {
     const next = { ...answersRef.current, [questionId]: answer };
@@ -153,64 +186,153 @@ export default function StudentAttemptPage() {
     setError(null);
   }
 
-  if (loading) return <main className="student-shell"><p className="student-muted">Loading exam…</p></main>;
-  if (!attempt) return (
-    <main className="student-shell">
-      <h1>Unable to open exam</h1>
-      {error && <p className="student-error" role="alert">{error}</p>}
-      <Link className="student-button" href="/student">Back to student portal</Link>
-    </main>
-  );
+  if (loading) {
+    return (
+      <div style={{ display: "grid", placeItems: "center", minHeight: "100vh" }}>
+        <LoadingState label="Loading exam…" />
+      </div>
+    );
+  }
+  if (!attempt) {
+    return (
+      <div style={{ maxWidth: 520, margin: "10vh auto", padding: "0 var(--s-4)" }}>
+        <Card className="stack gap-4">
+          <h1>Unable to open exam</h1>
+          {error && <Alert tone="error">{error}</Alert>}
+          <Link href="/student" className="btn btn-primary" style={{ width: "fit-content" }}>
+            Back to student portal
+          </Link>
+        </Card>
+      </div>
+    );
+  }
 
   const isOpen = attempt.status === "in_progress";
-  return (
-    <main className="student-shell">
-      <div className="student-topbar">
-        <Link className="student-brand" href="/student">MasterMinds</Link>
-        <div style={{ textAlign: "right" }}>
-          <div className="student-timer" aria-live="polite">Time remaining: {formatTime(remaining)}</div>
-          <div className="student-muted" style={{ fontSize: ".85rem" }}>{saveState}</div>
-        </div>
+  const questions = attempt.questions;
+  const answeredCount = questions.filter((q) => isAnswered(answers[q.question_version_id])).length;
+  const total = questions.length;
+  const q = questions[Math.min(current, Math.max(0, total - 1))];
+
+  if (!isOpen) {
+    return (
+      <div style={{ maxWidth: 560, margin: "8vh auto", padding: "0 var(--s-4)" }}>
+        <Card className="stack gap-4" style={{ textAlign: "center" }}>
+          <span className="state-icon" style={{ margin: "0 auto", background: "var(--success-50)", color: "var(--success-500)", width: 56, height: 56 }}>
+            <Icon.CheckCircle size={28} />
+          </span>
+          <h1>Exam submitted</h1>
+          <p className="muted">
+            Your attempt has been submitted successfully. Return to your dashboard to see whether
+            results have been released.
+          </p>
+          <Link href="/student" className="btn btn-primary" style={{ margin: "0 auto" }}>
+            Back to dashboard
+          </Link>
+        </Card>
       </div>
-      <section className="student-card">
-        <p className="student-pill">{isOpen ? "EXAM IN PROGRESS" : "ATTEMPT SUBMITTED"}</p>
-        <h1>Exam attempt</h1>
-        <p className="student-muted">Attempt {attempt.attempt_no} · Started {new Date(attempt.started_at).toLocaleString()}</p>
-        {!isOpen && <div className="student-success" role="status">Your exam has been submitted. You can return to the dashboard to see whether results have been released.</div>}
-      </section>
-      {error && <p className="student-error" role="alert">{error}</p>}
-      {attempt.questions.map((question, index) => {
-        const answer = answers[question.question_version_id] ?? {};
-        const selected = answer.selected_option_ids ?? [];
-        return (
-          <section className="student-question" key={question.question_version_id}>
-            <div style={{ display: "flex", justifyContent: "space-between", gap: "1rem" }}>
-              <strong>Question {index + 1}</strong>
-              <span className="student-pill">{question.marks} mark{question.marks === 1 ? "" : "s"}</span>
+    );
+  }
+
+  if (total === 0 || !q) {
+    return (
+      <div style={{ maxWidth: 520, margin: "10vh auto", padding: "0 var(--s-4)" }}>
+        <Card className="stack gap-4">
+          <h1>No questions available</h1>
+          <p className="muted">This attempt has no questions to display. Please contact your institution.</p>
+          <Link href="/student" className="btn btn-primary" style={{ width: "fit-content" }}>
+            Back to dashboard
+          </Link>
+        </Card>
+      </div>
+    );
+  }
+
+  const timerClass = remaining <= 60 ? "danger" : remaining <= 300 ? "warn" : "";
+
+  return (
+    <div style={{ minHeight: "100vh", background: "var(--bg-app)" }}>
+      <header className="exam-header">
+        <div className="exam-header-inner">
+          <div className="stack">
+            <span className="brand" style={{ fontSize: "var(--text-md)" }}>
+              <span className="sidebar-logo" style={{ width: 26, height: 26 }}>
+                <Icon.GraduationCap size={16} />
+              </span>
+              Exam in progress
+            </span>
+            <span className="muted text-xs">Attempt {attempt.attempt_no}</span>
+          </div>
+          <div className="row gap-4 wrap">
+            <span className={`save-status`} aria-live="polite">
+              {saveState === "saving" ? (
+                <>
+                  <Spinner /> Saving…
+                </>
+              ) : saveState === "failed" ? (
+                <span style={{ color: "var(--danger-700)" }} className="row gap-1">
+                  <Icon.AlertCircle size={14} /> Save failed
+                </span>
+              ) : (
+                <span className="row gap-1" style={{ color: "var(--success-700)" }}>
+                  <Icon.CheckCircle size={14} /> All changes saved
+                </span>
+              )}
+            </span>
+            <span className={`exam-timer ${timerClass}`} aria-live="polite" role="timer">
+              <Icon.Clock size={18} /> {formatTime(remaining)}
+            </span>
+          </div>
+        </div>
+      </header>
+
+      {error && (
+        <div style={{ maxWidth: 1120, margin: "var(--s-4) auto 0", padding: "0 var(--s-6)" }}>
+          <Alert tone="error">{error}</Alert>
+        </div>
+      )}
+
+      <div className="exam-body">
+        <div className="stack gap-5">
+          <Card className="stack gap-4">
+            <div className="row between wrap gap-2">
+              <span className="section-title">
+                Question {current + 1} of {total}
+              </span>
+              <Badge tone="neutral">
+                {q.marks} mark{q.marks === 1 ? "" : "s"}
+              </Badge>
             </div>
-            <p style={{ whiteSpace: "pre-wrap", lineHeight: 1.6 }}>{question.text}</p>
-            {question.type === "numerical" ? (
-              <label className="student-label" style={{ maxWidth: 320 }}>Your numerical answer
-                <input className="student-input" inputMode="decimal" disabled={!isOpen} value={answer.numerical_value ?? ""} onChange={e => setQuestionAnswer(question.question_version_id, { numerical_value: e.target.value })} />
-              </label>
+            <p style={{ whiteSpace: "pre-wrap", lineHeight: 1.65, fontSize: "var(--text-md)", margin: 0 }}>{q.text}</p>
+
+            {q.type === "numerical" ? (
+              <div className="field" style={{ maxWidth: 320 }}>
+                <label className="label">Your numerical answer</label>
+                <input
+                  className="input"
+                  inputMode="decimal"
+                  value={answers[q.question_version_id]?.numerical_value ?? ""}
+                  onChange={(e) => setQuestionAnswer(q.question_version_id, { numerical_value: e.target.value })}
+                  aria-label="Numerical answer"
+                />
+              </div>
             ) : (
-              <div>
-                {question.options.map(option => {
+              <div className="stack gap-2">
+                {q.options.map((option) => {
+                  const selected = answers[q.question_version_id]?.selected_option_ids ?? [];
                   const checked = selected.includes(option.id);
-                  const multi = question.type === "multi_mcq";
+                  const multi = q.type === "multi_mcq";
                   return (
-                    <label className="student-option" key={option.id}>
+                    <label key={option.id} className={`exam-option ${checked ? "selected" : ""}`}>
                       <input
                         type={multi ? "checkbox" : "radio"}
-                        name={`question-${question.question_version_id}`}
-                        disabled={!isOpen}
+                        name={`question-${q.question_version_id}`}
                         checked={checked}
                         onChange={() => {
                           if (multi) {
-                            const next = checked ? selected.filter(id => id !== option.id) : [...selected, option.id];
-                            setQuestionAnswer(question.question_version_id, { selected_option_ids: next });
+                            const next = checked ? selected.filter((id) => id !== option.id) : [...selected, option.id];
+                            setQuestionAnswer(q.question_version_id, { selected_option_ids: next });
                           } else {
-                            setQuestionAnswer(question.question_version_id, { selected_option_ids: [option.id] });
+                            setQuestionAnswer(q.question_version_id, { selected_option_ids: [option.id] });
                           }
                         }}
                       />
@@ -220,17 +342,83 @@ export default function StudentAttemptPage() {
                 })}
               </div>
             )}
-          </section>
-        );
-      })}
-      {isOpen ? (
-        <div style={{ display: "flex", gap: ".8rem", flexWrap: "wrap", alignItems: "center", margin: "1.5rem 0" }}>
-          <button className="student-button" disabled={submitting} onClick={() => void submitAttempt(false)}>{submitting ? "Submitting…" : "Submit exam"}</button>
-          <span className="student-muted">Answers save automatically. Once submitted, you cannot change them.</span>
+          </Card>
+
+          <div className="row between wrap gap-3">
+            <Button variant="secondary" disabled={current === 0} onClick={() => setCurrent((c) => Math.max(0, c - 1))} icon={<Icon.ChevronLeft size={16} />}>
+              Previous
+            </Button>
+            {current < total - 1 ? (
+              <Button onClick={() => setCurrent((c) => Math.min(total - 1, c + 1))}>
+                Next <Icon.ChevronRight size={16} />
+              </Button>
+            ) : (
+              <Button variant="success" icon={<Icon.Check size={16} />} onClick={() => setConfirmOpen(true)}>
+                Review & submit
+              </Button>
+            )}
+          </div>
         </div>
-      ) : (
-        <p><Link className="student-button" href="/student">Return to dashboard</Link></p>
-      )}
-    </main>
+
+        <aside className="exam-palette">
+          <Card className="stack gap-4">
+            <div className="row between">
+              <span className="section-title">Questions</span>
+              <Badge tone="accent">
+                {answeredCount}/{total}
+              </Badge>
+            </div>
+            <div className="palette-grid">
+              {questions.map((question, i) => {
+                const answered = isAnswered(answers[question.question_version_id]);
+                return (
+                  <button
+                    key={question.question_version_id}
+                    className={`palette-btn ${answered ? "answered" : ""} ${i === current ? "current" : ""}`}
+                    onClick={() => setCurrent(i)}
+                    aria-label={`Question ${i + 1}${answered ? ", answered" : ", not answered"}`}
+                    aria-current={i === current}
+                  >
+                    {i + 1}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="stack gap-2 text-xs muted">
+              <span className="row gap-2">
+                <span className="palette-btn answered" style={{ width: 16, height: 16, aspectRatio: "auto" }} /> Answered
+              </span>
+              <span className="row gap-2">
+                <span className="palette-btn" style={{ width: 16, height: 16, aspectRatio: "auto" }} /> Not answered
+              </span>
+            </div>
+            <Button block variant="success" icon={<Icon.Check size={16} />} onClick={() => setConfirmOpen(true)}>
+              Submit exam
+            </Button>
+            <p className="text-xs muted" style={{ margin: 0, textAlign: "center" }}>
+              Answers save automatically.
+            </p>
+          </Card>
+        </aside>
+      </div>
+
+      <ConfirmDialog
+        open={confirmOpen}
+        onClose={() => setConfirmOpen(false)}
+        onConfirm={() => {
+          setConfirmOpen(false);
+          void submitAttempt(false);
+        }}
+        title="Submit your exam?"
+        message={
+          answeredCount < total
+            ? `You have answered ${answeredCount} of ${total} questions. ${total - answeredCount} unanswered question(s) will be submitted blank. Once submitted, you cannot change your answers.`
+            : `You have answered all ${total} questions. Once submitted, you cannot change your answers.`
+        }
+        confirmLabel="Submit exam"
+        tone="success"
+        loading={submitting}
+      />
+    </div>
   );
 }

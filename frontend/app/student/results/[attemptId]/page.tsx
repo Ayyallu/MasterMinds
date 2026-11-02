@@ -4,7 +4,9 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
-import "../../student.css";
+import { StudentShell } from "@/components/StudentShell";
+import { Icon } from "@/components/icons";
+import { Alert, Badge, Card, LoadingState } from "@/components/ui";
 
 type Result = {
   attempt_id: number;
@@ -23,40 +25,98 @@ export default function StudentResultPage() {
   useEffect(() => {
     api<Result>(`/attempts/${params.attemptId}/result`)
       .then(setResult)
-      .catch(err => setError(err instanceof Error ? err.message : "Could not load result."))
+      .catch((err) => setError(err instanceof Error ? err.message : "Could not load result."))
       .finally(() => setLoading(false));
   }, [params.attemptId]);
 
+  const right = (
+    <Link href="/student" className="btn btn-secondary btn-sm">
+      <Icon.ChevronLeft size={16} /> Dashboard
+    </Link>
+  );
+
+  const pct = result && result.total_marks > 0 ? Math.round((result.awarded_marks / result.total_marks) * 100) : null;
+
   return (
-    <main className="student-shell">
-      <div className="student-topbar">
-        <Link className="student-brand" href="/student">MasterMinds</Link>
-        <Link className="student-button secondary" href="/student">Back to dashboard</Link>
+    <StudentShell right={right} maxWidth={820}>
+      <div style={{ marginBottom: "var(--s-6)" }}>
+        <span className="badge badge-accent">Exam result</span>
+        <h1 className="page-title" style={{ marginTop: "var(--s-3)" }}>
+          Your result
+        </h1>
       </div>
-      <section className="student-card">
-        <p className="student-pill">EXAM RESULT</p>
-        <h1>Your result</h1>
-        {loading && <p className="student-muted">Loading result…</p>}
-        {error && <p className="student-error" role="alert">{error}</p>}
-        {result && (
-          <>
-            <p className="student-muted">Exam #{result.exam_id} · Attempt #{result.attempt_id}</p>
-            <p style={{ fontSize: "2.4rem", fontWeight: 800, margin: ".75rem 0" }}>
-              {result.awarded_marks} <span className="student-muted" style={{ fontSize: "1.1rem", fontWeight: 500 }}>/ {result.total_marks} marks</span>
-            </p>
-            <div className="student-grid" style={{ marginTop: "1.5rem" }}>
+
+      {loading && <LoadingState label="Loading result…" />}
+      {error && <Alert tone="error">{error}</Alert>}
+
+      {result && (
+        <div className="stack gap-6">
+          <Card className="row between wrap gap-4" style={{ alignItems: "center" }}>
+            <div>
+              <p className="muted text-sm">
+                Exam #{result.exam_id} · Attempt #{result.attempt_id}
+              </p>
+              <div style={{ fontSize: "var(--text-3xl)", fontWeight: 750, marginTop: "var(--s-2)" }}>
+                {result.awarded_marks}
+                <span className="muted" style={{ fontSize: "var(--text-lg)", fontWeight: 500 }}>
+                  {" "}
+                  / {result.total_marks} marks
+                </span>
+              </div>
+            </div>
+            {pct != null && (
+              <div
+                style={{
+                  display: "grid",
+                  placeItems: "center",
+                  width: 92,
+                  height: 92,
+                  borderRadius: "50%",
+                  background: `conic-gradient(var(--indigo-500) ${pct * 3.6}deg, var(--grey-150) 0deg)`,
+                }}
+              >
+                <div style={{ width: 70, height: 70, borderRadius: "50%", background: "var(--bg-surface)", display: "grid", placeItems: "center", fontWeight: 750 }}>
+                  {pct}%
+                </div>
+              </div>
+            )}
+          </Card>
+
+          <Card pad={false}>
+            <div className="card-header">
+              <span className="card-title">Per-question breakdown</span>
+            </div>
+            <div className="card-pad grid grid-stats">
               {result.questions.map((question, index) => (
-                <div className="student-card" key={question.version_id}>
-                  <strong>Question {index + 1}</strong>
-                  <p>{question.awarded} / {question.marks} marks</p>
-                  <span className="student-pill">{question.correct === null ? "Reviewed" : question.correct ? "Correct" : "Incorrect"}</span>
+                <div
+                  key={question.version_id}
+                  className="stat"
+                  style={{ gap: "var(--s-2)" }}
+                >
+                  <span className="stat-label">Question {index + 1}</span>
+                  <span style={{ fontSize: "var(--text-lg)", fontWeight: 700 }} className="tabular">
+                    {question.awarded} / {question.marks}
+                  </span>
+                  <Badge tone={question.correct === null ? "neutral" : question.correct ? "success" : "danger"} dot>
+                    {question.correct === null ? "Reviewed" : question.correct ? "Correct" : "Incorrect"}
+                  </Badge>
                 </div>
               ))}
             </div>
-            <p className="student-muted" style={{ marginTop: "1.25rem" }}>For exam questions or grading concerns, contact your institution. Correct answers and answer explanations are not shown in this result view.</p>
-          </>
-        )}
-      </section>
-    </main>
+          </Card>
+
+          <Alert tone="info">
+            Correct answers and explanations are not shown here. For questions or grading concerns,
+            contact your institution.
+          </Alert>
+
+          <div>
+            <Link href="/student" className="btn btn-primary">
+              Back to dashboard
+            </Link>
+          </div>
+        </div>
+      )}
+    </StudentShell>
   );
 }
