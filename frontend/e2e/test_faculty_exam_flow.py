@@ -148,9 +148,9 @@ def test_faculty_creates_exam_admin_schedules_and_student_can_start(page: Page) 
     page.get_by_role("button", name="Create draft").click()
 
     expect(page.get_by_role("heading", name="Faculty-created Mathematics Assessment")).to_be_visible()
-    expect(page.get_by_text("draft", exact=True)).to_be_visible()
+    expect(page.get_by_text("Draft", exact=True)).to_be_visible()
     page.get_by_role("button", name="Submit for approval").click()
-    expect(page.get_by_text("awaiting approval", exact=False)).to_be_visible()
+    expect(page.get_by_text("Awaiting approval", exact=True)).to_be_visible()
     assert state["created_payload"] == {
         "title": "Faculty-created Mathematics Assessment",
         "class_group_id": 770,
@@ -173,12 +173,12 @@ def test_faculty_creates_exam_admin_schedules_and_student_can_start(page: Page) 
     admin.goto(f"{BASE_URL}/admin/exams/{EXAM_ID}")
     expect(admin.get_by_role("heading", name="Faculty-created Mathematics Assessment")).to_be_visible()
     admin.get_by_role("button", name="Approve").click()
-    expect(admin.get_by_text("approved", exact=True)).to_be_visible()
+    expect(admin.get_by_text("Approved", exact=True)).to_be_visible()
     admin.get_by_role("button", name="Schedule").click()
     admin.get_by_label("Start time").fill("2026-11-03T09:00")
     admin.get_by_label("End time").fill("2026-11-03T10:00")
     admin.get_by_role("button", name="Schedule", exact=True).last.click()
-    expect(admin.get_by_text("scheduled", exact=True)).to_be_visible()
+    expect(admin.get_by_text("Scheduled", exact=True)).to_be_visible()
     assert state["scheduled"] is True
 
     # Student sees the scheduled assessment and can launch an attempt.
