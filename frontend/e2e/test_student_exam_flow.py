@@ -14,22 +14,35 @@ def test_student_signs_in_answers_and_submits_exam(page: Page) -> None:
     """Exercise the student-facing browser journey without touching demo data."""
     observed: dict[str, object] = {"answer_saved": False, "submitted": False}
 
+    cors_headers = {
+        "access-control-allow-origin": BASE_URL,
+        "access-control-allow-credentials": "true",
+        "access-control-allow-headers": "authorization,content-type",
+        "access-control-allow-methods": "GET,POST,PUT,OPTIONS",
+    }
+
+    def respond(route, status: int, payload: dict | list) -> None:
+        route.fulfill(status=status, json=payload, headers=cors_headers)
+
     def mock_api(route) -> None:
         request = route.request
         path, method = urlparse(request.url).path, request.method
+        if method == "OPTIONS":
+            route.fulfill(status=204, headers=cors_headers)
+            return
         if path == "/auth/login" and method == "POST":
-            route.fulfill(status=200, json={
+            respond(route, 200, {
                 "access_token": "playwright-access-token",
                 "refresh_token": "playwright-refresh-token",
                 "token_type": "bearer", "mfa_required": False,
             })
         elif path == "/auth/me" and method == "GET":
-            route.fulfill(status=200, json={
+            respond(route, 200, {
                 "id": 9001, "full_name": "Automation Student", "email": None,
                 "is_super_admin": False, "roles": ["student"], "institution_ids": [77],
             })
         elif path == "/student/exams" and method == "GET":
-            route.fulfill(status=200, json=[{
+            respond(route, 200, [{
                 "id": 501, "institution_id": 77,
                 "institution_name": "Automation Demo School",
                 "title": "Playwright Mathematics Test", "status": "live",
@@ -38,12 +51,12 @@ def test_student_signs_in_answers_and_submits_exam(page: Page) -> None:
                 "attempts": [],
             }])
         elif path == "/exams/501/attempts/start" and method == "POST":
-            route.fulfill(status=200, json=_attempt_payload())
+            respond(route, 200, _attempt_payload())
         elif path == "/attempts/601" and method == "GET":
-            route.fulfill(status=200, json=_attempt_payload())
+            respond(route, 200, _attempt_payload())
         elif path == "/attempts/601/answers/701" and method == "PUT":
             observed["answer_saved"] = request.post_data_json == {"selected_option_ids": [802]}
-            route.fulfill(status=200, json={"question_version_id": 701, "answer_version": 1})
+            respond(route, 200, {"question_version_id": 701, "answer_version": 1})
         elif path == "/attempts/601/submit" and method == "POST":
             observed["submitted"] = True
             payload = _attempt_payload()
@@ -51,9 +64,9 @@ def test_student_signs_in_answers_and_submits_exam(page: Page) -> None:
                 "status": "submitted", "submitted_at": "2026-11-03T09:05:00Z",
                 "seconds_remaining": 0, "questions": [],
             })
-            route.fulfill(status=200, json=payload)
+            respond(route, 200, payload)
         else:
-            route.fulfill(status=404, json={"detail": f"Unexpected test API request: {method} {path}"})
+            respond(route, 404, {"detail": f"Unexpected test API request: {method} {path}"})
 
     page.route(f"{API_ORIGIN}/**", mock_api)
     page.goto(f"{BASE_URL}/student")
