@@ -152,6 +152,8 @@ async def my_result(
     current: CurrentUser = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
+    if RoleName.student.value not in current.roles:
+        raise HTTPException(status_code=403, detail="Student access required")
     try:
         return await scoring_service.student_result(session, current.id, attempt_id)
     except AuthError as exc:

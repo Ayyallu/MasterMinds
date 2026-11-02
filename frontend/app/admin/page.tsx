@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-import { api, getToken, setToken } from "@/lib/api";
+import { api, clearTokens, getToken, setRefreshToken, setToken } from "@/lib/api";
 
 type Me = {
   id: number;
@@ -41,7 +41,7 @@ export default function AdminPage() {
     try {
       setMe(await api<Me>("/auth/me"));
     } catch {
-      setToken(null);
+      clearTokens();
       setMe(null);
     }
   }, []);
@@ -60,7 +60,7 @@ export default function AdminPage() {
         {me.is_super_admin ? "(Super Admin)" : `(${me.roles.join(", ")})`}{" "}
         <button
           onClick={() => {
-            setToken(null);
+            clearTokens();
             setMe(null);
           }}
         >
@@ -92,12 +92,13 @@ function LoginForm({
     e.preventDefault();
     setError(null);
     try {
-      const res = await api<{ access_token: string }>("/auth/login", {
+      const res = await api<{ access_token: string; refresh_token: string }>("/auth/login", {
         method: "POST",
         auth: false,
         body: { email, password },
       });
       setToken(res.access_token);
+      setRefreshToken(res.refresh_token);
       onDone();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");
