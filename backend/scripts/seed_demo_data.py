@@ -15,6 +15,7 @@ from app.config import get_settings
 from app.db import SessionLocal
 from app.models import (
     ClassGroup,
+    Enrollment,
     Institution,
     InstitutionMembership,
     InstitutionStatus,
@@ -142,6 +143,23 @@ async def seed() -> None:
             )
             session.add(group)
             await session.flush()
+
+        enrollment = await session.scalar(
+            select(Enrollment).where(
+                Enrollment.student_user_id == student.id,
+                Enrollment.class_group_id == group.id,
+                Enrollment.institution_id == institution.id,
+            )
+        )
+        if enrollment is None:
+            session.add(
+                Enrollment(
+                    institution_id=institution.id,
+                    student_user_id=student.id,
+                    class_group_id=group.id,
+                    status="active",
+                )
+            )
 
         assignment = await session.scalar(
             select(TeacherAssignment).where(
