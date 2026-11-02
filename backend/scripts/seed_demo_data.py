@@ -35,9 +35,9 @@ from app.security import hash_password
 
 INSTITUTION_CODE = "DEMO01"
 ACCOUNTS = [
-    ("admin@demo.masterminds.local", "Demo Institution Admin", "institution_admin", "DEMO-ADMIN"),
-    ("teacher@demo.masterminds.local", "Demo Faculty", "teacher", "DEMO-TEACHER"),
-    ("student@demo.masterminds.local", "Demo Student", "student", "MM-DEMO-001"),
+    ("admin@demo.example.com", "Demo Institution Admin", "institution_admin", "DEMO-ADMIN"),
+    ("teacher@demo.example.com", "Demo Faculty", "teacher", "DEMO-TEACHER"),
+    ("student@demo.example.com", "Demo Student", "student", "MM-DEMO-001"),
 ]
 
 
