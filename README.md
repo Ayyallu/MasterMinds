@@ -28,3 +28,35 @@ student-portal changes.
 Next.js + TypeScript · FastAPI · SQLAlchemy 2.x async · Alembic · PostgreSQL
 
 See [CLAUDE.md](CLAUDE.md) for conventions, guardrails, and full run instructions.
+
+
+## Local demo bootstrap
+
+After applying the database migrations, create the first platform administrator once from `backend/`:
+
+```powershell
+python -m scripts.create_super_admin
+```
+
+The command prompts for an email, name and a 12-character-minimum password. It does not use a hard-coded credential and will not elevate an existing non-Super-Admin account.
+
+To create a synthetic demo institution, one Institution Admin, one Faculty account, one Student account, an assigned class group and five approved sample MCQs, set three local-only passwords (each at least 12 characters) and run:
+
+```powershell
+$env:DEMO_ADMIN_PASSWORD = "use-a-unique-local-password"
+$env:DEMO_TEACHER_PASSWORD = "use-another-unique-password"
+$env:DEMO_STUDENT_PASSWORD = "use-a-third-unique-password"
+python -m scripts.seed_demo_data
+```
+
+The seed command refuses to run when `ENVIRONMENT=production`. It is idempotent for the demo institution and existing accounts; existing account passwords are not overwritten. Synthetic credentials:
+
+| Role | Email | Student register number |
+|---|---|---|
+| Institution Admin | `admin@demo.masterminds.local` | — |
+| Faculty | `teacher@demo.masterminds.local` | — |
+| Student | `student@demo.masterminds.local` | `MM-DEMO-001` |
+
+The demo Faculty account is assigned to `Grade 10 - Section A`; the sample questions are approved and can be used to create a draft exam. Use the local passwords supplied in the three environment variables above.
+
+For AI question generation, keep `AI_PROVIDER=mock` for a free deterministic local demo. No NVIDIA API key is needed unless you explicitly switch to `AI_PROVIDER=nvidia`.
