@@ -9,6 +9,7 @@ import asyncio
 from getpass import getpass
 
 from sqlalchemy import select
+from pydantic import EmailStr, TypeAdapter, ValidationError
 
 from app.db import SessionLocal
 from app.models import Role, RoleName, User, UserRole, UserStatus
@@ -62,7 +63,11 @@ async def create_super_admin(email: str, full_name: str, password: str) -> None:
 
 
 def main() -> None:
-    email = input("Super Admin email: ").strip()
+    email = input("Super Admin email (e.g. superadmin@demo.example.com): ").strip()
+    try:
+        email = str(TypeAdapter(EmailStr).validate_python(email))
+    except ValidationError as exc:
+        raise SystemExit("Enter a valid sign-in email address (avoid reserved TLDs such as .local).") from exc
     full_name = input("Full name: ").strip()
     password = getpass("Password (minimum 12 characters): ")
     confirmation = getpass("Confirm password: ")
