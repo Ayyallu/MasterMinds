@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { Icon } from "./icons";
 import { Alert, Button, Dialog, Field, Input, Select } from "./ui";
 
 type Rule = { count: number; type: string; difficulty: string };
 type ExamOut = { id: number; title: string; status: string };
+type ClassGroup = { id: number; name: string };
 
 /** Create-exam dialog. Returns the created exam via onCreated. */
 export function ExamForm({
@@ -19,6 +20,9 @@ export function ExamForm({
   onCreated: (exam: ExamOut) => void;
 }) {
   const [title, setTitle] = useState("");
+  const [classGroups, setClassGroups] = useState<ClassGroup[]>([]);
+  const [classGroupId, setClassGroupId] = useState("");
+  const [groupsLoading, setGroupsLoading] = useState(true);
   const [duration, setDuration] = useState(60);
   const [attemptLimit, setAttemptLimit] = useState(1);
   const [randomize, setRandomize] = useState(true);
@@ -28,8 +32,27 @@ export function ExamForm({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    let active = true;
+    api<ClassGroup[]>(`/institutions/${institutionId}/class-groups/available-for-exam`)
+      .then((groups) => {
+        if (!active) return;
+        setClassGroups(groups);
+        if (groups.length === 1) setClassGroupId(String(groups[0].id));
+      })
+      .catch((err) => {
+        if (active) setError(err instanceof Error ? err.message : "Could not load assigned class groups.");
+      })
+      .finally(() => { if (active) setGroupsLoading(false); });
+    return () => { active = false; };
+  }, [institutionId]);
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    if (!classGroupId) {
+      setError("Select a class group before creating the exam.");
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -42,6 +65,7 @@ export function ExamForm({
         method: "POST",
         body: {
           title: title.trim(),
+          class_group_id: Number(classGroupId),
           duration_minutes: duration,
           attempt_limit: attemptLimit,
           randomize,
@@ -81,6 +105,24 @@ export function ExamForm({
         <Field label="Exam title">
           <Input required value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Physics — Unit 1 Test" aria-label="Exam title" />
         </Field>
+        <Field label="Target class group" hint="Teachers can select only class groups assigned to them.">
+          <Select
+            required
+            value={classGroupId}
+            onChange={(e) => setClassGroupId(e.target.value)}
+            aria-label="Target class group"
+            disabled={groupsLoading || classGroups.length === 0}
+          >
+            <option value="">{groupsLoading ? "Loading class groups…" : "Select a class group"}</option>
+            {classGroups.map((group) => (
+              <option key={group.id} value={group.id}>{group.name}</option>
+            ))}
+          </Select>
+          {!groupsLoading && classGroups.length === 0 && (
+            <p className="muted text-sm">No class groups are available. Ask your Institution Admin to create a class group or assign you to one.</p>
+          )}
+        </Field>
+
         <div className="row gap-3 wrap">
           <Field label="Duration (min)">
             <Input type="number" min={1} value={duration} onChange={(e) => setDuration(Math.max(1, Number(e.target.value) || 1))} aria-label="Duration minutes" style={{ width: 120 }} />
