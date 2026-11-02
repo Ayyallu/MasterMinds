@@ -200,25 +200,35 @@ async def review_global_version(
     return v
 
 
-async def search_global(session: AsyncSession, filters) -> list[QuestionVersion]:
-    """Approved global questions available for cross-institution reuse.
+async def search_global(
+    session: AsyncSession, filters, *, can_review: bool = False
+) -> list[QuestionVersion]:
+    """Search global questions without exposing tenant-private content.
 
-    Private questions are never included; global questions carry no source
-    institution, so no tenant metadata is exposed."""
+    Only central reviewers may select non-approved workflow states. All other
+    callers are restricted to approved versions, regardless of the status
+    submitted in their request.
+    """
     stmt = (
         select(QuestionVersion)
         .join(Question, Question.id == QuestionVersion.question_id)
         .where(
             Question.is_global.is_(True),
             Question.withdrawn.is_(False),
-            QuestionVersion.status == QuestionStatus.approved.value,
         )
     )
+    if can_review:
+        if filters.status is not None:
+            stmt = stmt.where(QuestionVersion.status == filters.status)
+    else:
+        stmt = stmt.where(QuestionVersion.status == QuestionStatus.approved.value)
     if filters.type is not None:
         stmt = stmt.where(QuestionVersion.type == filters.type.value)
     if filters.difficulty is not None:
         stmt = stmt.where(QuestionVersion.difficulty == filters.difficulty.value)
-    res = await session.execute(stmt.order_by(QuestionVersion.id).limit(MAX_SEARCH_ROWS))
+    res = await session.execute(
+        stmt.order_by(QuestionVersion.id).limit(MAX_SEARCH_ROWS)
+    )
     return list(res.scalars().all())
 
 
