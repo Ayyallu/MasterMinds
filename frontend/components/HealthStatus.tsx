@@ -105,22 +105,21 @@ export default function HealthStatus() {
         : "Backend: checking…";
 
   const color =
-    status === "ok" ? "#15803d" : status === "unavailable" ? "#b91c1c" : "#6b7280";
+    status === "ok" ? "var(--success-500)" : status === "unavailable" ? "var(--danger-500)" : "var(--grey-400)";
 
   return (
-    <p>
+    <span className="row gap-2 text-sm muted" role="status" style={{ display: "inline-flex" }}>
       <span
         aria-hidden
         style={{
           display: "inline-block",
-          width: 10,
-          height: 10,
+          width: 8,
+          height: 8,
           borderRadius: "50%",
           background: color,
-          marginRight: 8,
         }}
       />
-      <span role="status">{label}</span>
-    </p>
+      {label}
+    </span>
   );
 }

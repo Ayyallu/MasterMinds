@@ -1,22 +1,26 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
+import { Inter } from "next/font/google";
+import { ToastProvider } from "@/components/ui";
+import "./globals.css";
+
+const inter = Inter({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-inter",
+});
 
 export const metadata: Metadata = {
-  title: "MasterMinds",
-  description: "Online Exam SaaS",
+  title: "MasterMinds — Online Exam Platform",
+  description:
+    "A secure online examination platform for schools and colleges.",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
-      <body
-        style={{
-          fontFamily: "system-ui, sans-serif",
-          margin: 0,
-          padding: "2rem",
-        }}
-      >
-        {children}
+    <html lang="en" className={inter.variable}>
+      <body>
+        <ToastProvider>{children}</ToastProvider>
       </body>
     </html>
   );
