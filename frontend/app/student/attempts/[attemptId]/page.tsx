@@ -39,6 +39,11 @@ function formatTime(seconds: number) {
   return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
 }
 
+/** A complete decimal number the server will accept (e.g. "3", "-0.5", "1e3"). */
+function isValidNumber(v: string): boolean {
+  return /^\s*[-+]?(\d+(\.\d*)?|\.\d+)([eE][-+]?\d+)?\s*$/.test(v);
+}
+
 function isAnswered(a: Answer | undefined): boolean {
   if (!a) return false;
   if (a.selected_option_ids && a.selected_option_ids.length > 0) return true;
@@ -60,6 +65,8 @@ export default function StudentAttemptPage() {
   const [error, setError] = useState<string | null>(null);
   const submittedRef = useRef(false);
   const answersRef = useRef<Record<number, Answer>>({});
+  // JSON of each answer as last confirmed by the server — avoids re-sending.
+  const lastSaved = useRef<Record<string, string>>({});
 
   useEffect(() => {
     answersRef.current = answers;
@@ -79,6 +86,7 @@ export default function StudentAttemptPage() {
       for (const question of data.questions) {
         if (question.answer) restored[question.question_version_id] = question.answer;
       }
+      lastSaved.current = Object.fromEntries(Object.entries(restored).map(([k, v]) => [k, JSON.stringify(v)]));
       setAnswers(restored);
       if (data.status !== "in_progress") submittedRef.current = true;
     } catch (err) {
@@ -147,19 +155,25 @@ export default function StudentAttemptPage() {
 
   useEffect(() => {
     if (!attempt || attempt.status !== "in_progress") return;
-    const ids = Object.keys(answers);
+    // Only send answers that changed since their last successful save, and
+    // hold back unfinished numbers ("-", "3e") until they are valid.
+    const ids = Object.keys(answers).filter((key) => {
+      const a = answers[Number(key)];
+      if (a?.numerical_value !== undefined && a.numerical_value.trim() !== "" && !isValidNumber(a.numerical_value)) return false;
+      return lastSaved.current[key] !== JSON.stringify(a);
+    });
     if (ids.length === 0) return;
     setSaveState("saving");
     const timer = window.setTimeout(async () => {
       try {
         for (const key of ids) {
           const questionId = Number(key);
-          await api(`/attempts/${attempt.id}/answers/${questionId}`, {
-            method: "PUT",
-            body: answers[questionId],
-          });
+          const body = answers[questionId];
+          await api(`/attempts/${attempt.id}/answers/${questionId}`, { method: "PUT", body });
+          lastSaved.current[key] = JSON.stringify(body);
         }
         setSaveState("saved");
+        setError(null);
       } catch (err) {
         setSaveState("failed");
         setError(err instanceof Error ? err.message : "Could not save an answer.");
@@ -212,6 +226,8 @@ export default function StudentAttemptPage() {
   const answeredCount = questions.filter((q) => isAnswered(answers[q.question_version_id])).length;
   const total = questions.length;
   const q = questions[Math.min(current, Math.max(0, total - 1))];
+  const typedNumber = q ? answers[q.question_version_id]?.numerical_value ?? "" : "";
+  const numberOk = typedNumber.trim() === "" || isValidNumber(typedNumber);
 
   if (!isOpen) {
     return (
@@ -313,7 +329,9 @@ export default function StudentAttemptPage() {
                   value={answers[q.question_version_id]?.numerical_value ?? ""}
                   onChange={(e) => setQuestionAnswer(q.question_version_id, { numerical_value: e.target.value })}
                   aria-label="Numerical answer"
+                  aria-invalid={!numberOk}
                 />
+                {!numberOk && <span className="hint" style={{ color: "var(--danger-700)" }}>Enter a number, e.g. 3.14 — it saves once valid.</span>}
               </div>
             ) : (
               <div className="stack gap-2">

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, type ReactNode } from "react";
 import { Icon } from "./icons";
+import { InstitutionChip } from "./Institution";
 import { Button, cx } from "./ui";
 import { initials, type Me, primaryRoleLabel } from "@/lib/session";
 
@@ -40,6 +41,9 @@ export function AppShell({
           </span>
           MasterMinds
         </Link>
+        {!me.is_super_admin && me.institution_ids[0] !== undefined && (
+          <InstitutionChip institutionId={me.institution_ids[0]} />
+        )}
         <nav className="stack gap-1">
           {nav.map((group, gi) => (
             <div key={gi} className="stack gap-1">

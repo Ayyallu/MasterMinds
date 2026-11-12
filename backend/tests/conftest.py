@@ -23,6 +23,14 @@ from app.security import hash_password
 ROLE_NAMES = [r.value for r in RoleName]
 
 
+@pytest.fixture(autouse=True)
+def _mock_ai_provider(monkeypatch):
+    """Tests never call a real AI provider, whatever backend/.env says."""
+    from app.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "ai_provider", "mock")
+
+
 @pytest_asyncio.fixture
 async def engine():
     eng = create_async_engine(

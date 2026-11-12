@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api, clearTokens, getToken, setRefreshToken, setToken } from "@/lib/api";
 import { AuthLayout } from "@/components/AuthLayout";
 import { StudentShell } from "@/components/StudentShell";
+import { InstitutionProfileCard, useInstitutionProfile } from "@/components/Institution";
 import { Icon } from "@/components/icons";
 import {
   Alert,
@@ -40,7 +41,7 @@ type StudentExam = {
   can_start: boolean;
   attempts: Attempt[];
 };
-type StudentMe = { id: number; full_name: string; email: string | null; roles: string[] };
+type StudentMe = { id: number; full_name: string; email: string | null; roles: string[]; institution_ids: number[] };
 
 export default function StudentHome() {
   const toast = useToast();
@@ -178,7 +179,7 @@ export default function StudentHome() {
   const upcoming = exams.filter((e) => e.can_start || e.attempts.some((a) => a.status === "in_progress"));
 
   return (
-    <StudentShell userName={me.full_name} onSignOut={signOut}>
+    <StudentShell userName={me.full_name} institutionId={me.institution_ids[0]} onSignOut={signOut}>
       <div className="page-header">
         <div>
           <span className="badge badge-accent">Student dashboard</span>
@@ -191,6 +192,8 @@ export default function StudentHome() {
       </div>
 
       {error && <Alert tone="error">{error}</Alert>}
+
+      <StudentInstitutionCard institutionId={me.institution_ids[0]} />
 
       {exams.length === 0 ? (
         <Card>
@@ -266,5 +269,15 @@ export default function StudentHome() {
         </div>
       )}
     </StudentShell>
+  );
+}
+
+function StudentInstitutionCard({ institutionId }: { institutionId: number | undefined }) {
+  const { data } = useInstitutionProfile(institutionId);
+  if (!data) return null;
+  return (
+    <div style={{ marginBottom: "var(--s-6)" }}>
+      <InstitutionProfileCard profile={data} />
+    </div>
   );
 }

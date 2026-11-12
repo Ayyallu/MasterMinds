@@ -148,3 +148,129 @@ async def set_institution_status(
         detail={"status": status},
     )
     return institution
+
+
+# --- Institution profile (Super Admin direct creation + edits) ---
+_PROFILE_FIELDS = (
+    "name", "institution_type", "affiliation", "established_year", "head_name",
+    "email", "phone", "website", "address_line1", "address_line2", "city",
+    "state", "postal_code", "country", "time_zone",
+)
+
+LOGO_MAX_BYTES = 1024 * 1024  # 1 MiB
+# Raster only: SVG can carry script, so it is deliberately not accepted.
+LOGO_TYPES = {"image/png": b"\x89PNG", "image/jpeg": b"\xff\xd8\xff", "image/webp": b"RIFF"}
+
+
+async def create_institution(
+    session: AsyncSession, *, actor_id: int, data
+) -> tuple[Institution, str | None]:
+    exists = await session.scalar(select(Institution.id).where(Institution.code == data.code))
+    if exists is not None:
+        raise AuthError("Institution code already in use", status_code=409)
+    if await provisioning.get_user_by_email(session, data.admin_email) is not None:
+        raise AuthError("Admin email already in use", status_code=409)
+
+    institution = Institution(
+        code=data.code,
+        status=InstitutionStatus.active.value,
+        **{f: getattr(data, f) for f in _PROFILE_FIELDS},
+    )
+    session.add(institution)
+    await session.flush()
+
+    temp_password = data.admin_password or generate_opaque_token()[:16]
+    admin = await provisioning.create_user(
+        session,
+        email=data.admin_email,
+        full_name=data.admin_full_name,
+        password=temp_password,
+    )
+    await provisioning.grant_role(
+        session, admin.id, RoleName.institution_admin, institution.id
+    )
+    await provisioning.ensure_membership(session, admin.id, institution.id)
+    await record_audit(
+        session,
+        "institution.created",
+        actor_user_id=actor_id,
+        institution_id=institution.id,
+        target=institution.code,
+    )
+    return institution, (None if data.admin_password else temp_password)
+
+
+async def list_institutions(session: AsyncSession) -> list[Institution]:
+    res = await session.execute(select(Institution).order_by(Institution.name))
+    return list(res.scalars().all())
+
+
+async def get_institution(session: AsyncSession, institution_id: int) -> Institution:
+    institution = await session.get(Institution, institution_id)
+    if institution is None:
+        raise AuthError("Institution not found", status_code=404)
+    return institution
+
+
+async def update_institution(
+    session: AsyncSession, *, institution_id: int, actor_id: int, data
+) -> Institution:
+    institution = await get_institution(session, institution_id)
+    for f in _PROFILE_FIELDS:
+        setattr(institution, f, getattr(data, f))
+    institution.updated_at = _utcnow()
+    await record_audit(
+        session,
+        "institution.updated",
+        actor_user_id=actor_id,
+        institution_id=institution_id,
+    )
+    return institution
+
+
+async def set_logo(
+    session: AsyncSession,
+    *,
+    institution_id: int,
+    actor_id: int,
+    content_type: str,
+    content: bytes,
+) -> Institution:
+    magic = LOGO_TYPES.get(content_type)
+    if magic is None:
+        raise AuthError("Logo must be a PNG, JPEG or WebP image", 400)
+    if not content:
+        raise AuthError("Empty file", 400)
+    if len(content) > LOGO_MAX_BYTES:
+        raise AuthError("Logo must be 1 MB or smaller", 400)
+    # Check the file signature so the declared type can't be spoofed.
+    if not content.startswith(magic) or (
+        content_type == "image/webp" and content[8:12] != b"WEBP"
+    ):
+        raise AuthError("File content does not match its image type", 400)
+    institution = await get_institution(session, institution_id)
+    institution.logo_data = content
+    institution.logo_content_type = content_type
+    institution.updated_at = _utcnow()
+    await record_audit(
+        session,
+        "institution.logo_updated",
+        actor_user_id=actor_id,
+        institution_id=institution_id,
+    )
+    return institution
+
+
+async def clear_logo(
+    session: AsyncSession, *, institution_id: int, actor_id: int
+) -> None:
+    institution = await get_institution(session, institution_id)
+    institution.logo_data = None
+    institution.logo_content_type = None
+    institution.updated_at = _utcnow()
+    await record_audit(
+        session,
+        "institution.logo_removed",
+        actor_user_id=actor_id,
+        institution_id=institution_id,
+    )

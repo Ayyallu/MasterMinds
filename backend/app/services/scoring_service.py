@@ -4,6 +4,7 @@ from __future__ import annotations
 import csv
 import io
 from datetime import date, datetime, timezone
+from decimal import Decimal, InvalidOperation
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -33,11 +34,15 @@ def _aware(dt: datetime) -> datetime:
 
 
 def _numeric_match(student: str, answer: str, tol: str | None) -> bool:
+    # Decimal (not float) so a tolerance boundary is exact: 3.13 vs 3.14 ± 0.01
+    # must match. Binary floats make |3.13 - 3.14| slightly larger than 0.01.
     try:
-        s, a = float(student), float(answer)
-        t = float(tol) if tol not in (None, "") else 0.0
-        return abs(s - a) <= t
-    except (TypeError, ValueError):
+        s, a = Decimal(str(student).strip()), Decimal(str(answer).strip())
+        t = Decimal(str(tol).strip()) if tol not in (None, "") else Decimal(0)
+        if not (s.is_finite() and a.is_finite() and t.is_finite()):
+            return False
+        return abs(s - a) <= abs(t)
+    except (InvalidOperation, TypeError, ValueError):
         return str(student).strip() == str(answer).strip()
 
 
@@ -219,6 +224,10 @@ async def correct_score(
     score = res.scalar_one_or_none()
     if score is None:
         raise AuthError("Attempt has not been scored yet", 409)
+    if not 0 <= awarded_marks <= score.total_marks:
+        raise AuthError(
+            f"Corrected marks must be between 0 and {score.total_marks}", 400
+        )
     score.awarded_marks = awarded_marks
     score.score_version += 1
     score.scored_by_user_id = actor_id

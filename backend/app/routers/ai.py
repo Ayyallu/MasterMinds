@@ -64,6 +64,32 @@ def _spec(payload: GenerationRequest) -> GenerationSpec:
     )
 
 
+# --- Provider status (lets the UI show which generator is active) ---
+status_router = APIRouter(tags=["ai"])
+
+
+@status_router.get("/ai/status")
+async def ai_status(
+    _: CurrentUser = Depends(
+        require_roles(
+            RoleName.institution_admin,
+            RoleName.teacher,
+            RoleName.central_academic_reviewer,
+        )
+    ),
+) -> dict:
+    """Which provider/model is active and whether it is configured.
+    Never returns the key itself."""
+    s = get_settings()
+    provider = s.ai_provider
+    configured = provider == "mock" or (provider == "nvidia" and bool(s.nvidia_api_key.strip()))
+    return {
+        "provider": provider,
+        "model": s.nvidia_model if provider == "nvidia" else "mock-1",
+        "configured": configured,
+    }
+
+
 # --- Institution-private generation ---
 inst_router = APIRouter(prefix="/institutions/{institution_id}", tags=["ai"])
 

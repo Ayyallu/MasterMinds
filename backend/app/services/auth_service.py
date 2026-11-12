@@ -83,13 +83,33 @@ async def get_user_roles(session: AsyncSession, user_id: int) -> list[str]:
 
 
 async def get_user_institution_ids(session: AsyncSession, user_id: int) -> list[int]:
+    """Institutions the user may act in: active membership AND active institution.
+    A disabled institution drops out here, so tenant-scope checks deny it."""
     rows = await session.execute(
-        select(InstitutionMembership.institution_id).where(
+        select(InstitutionMembership.institution_id)
+        .join(Institution, Institution.id == InstitutionMembership.institution_id)
+        .where(
             InstitutionMembership.user_id == user_id,
             InstitutionMembership.status == UserStatus.active.value,
+            Institution.status == InstitutionStatus.active.value,
         )
     )
     return sorted({i for (i,) in rows.all()})
+
+
+async def institution_access_blocked(session: AsyncSession, user: User) -> bool:
+    """True when a (non-platform) user's only institutions are disabled."""
+    if user.is_super_admin:
+        return False
+    has_membership = await session.scalar(
+        select(InstitutionMembership.id).where(
+            InstitutionMembership.user_id == user.id,
+            InstitutionMembership.status == UserStatus.active.value,
+        ).limit(1)
+    )
+    if has_membership is None:
+        return False  # platform-only users (e.g. central reviewer)
+    return not await get_user_institution_ids(session, user.id)
 
 
 async def _find_user_for_login(
@@ -150,6 +170,9 @@ async def authenticate(
         raise AuthError("Account is disabled", status_code=403)
     if user.status != UserStatus.active.value:
         raise AuthError("Account is not active", status_code=403)
+
+    if await institution_access_blocked(session, user):
+        raise AuthError("Your institution's access has been disabled", status_code=403)
 
     if user.mfa_enabled:
         if not totp_code:
@@ -225,6 +248,8 @@ async def rotate_refresh(
     user = user_res.scalar_one_or_none()
     if user is None or user.status != UserStatus.active.value:
         raise AuthError("Account is not active", status_code=403)
+    if await institution_access_blocked(session, user):
+        raise AuthError("Your institution's access has been disabled", status_code=403)
 
     token.used_at = _utcnow()
     return await issue_tokens(session, user, family_id=token.family_id)

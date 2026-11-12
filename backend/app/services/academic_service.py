@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,6 +17,7 @@ from app.models import (
     GradeLevel,
     Institution,
     InstitutionMembership,
+    InstitutionStatus,
     Invitation,
     InvitationStatus,
     RoleName,
@@ -108,6 +109,7 @@ async def create_course(session, institution_id, data) -> Course:
 
 
 async def create_class_group(session, institution_id, data) -> ClassGroup:
+    await _check_tenant_refs(session, ClassGroup, institution_id, data.model_dump())
     obj = ClassGroup(
         institution_id=institution_id,
         name=data.name,
@@ -158,16 +160,45 @@ async def _get_owned(session: AsyncSession, model, institution_id: int, obj_id: 
     return obj
 
 
-async def update_row(
-    session: AsyncSession, model, institution_id: int, obj_id: int, values: dict
-):
-    obj = await _get_owned(session, model, institution_id, obj_id)
+async def _check_tenant_refs(
+    session: AsyncSession, model, institution_id: int, values: dict
+) -> None:
+    """Every linked row (term, grade, course…) must exist in the SAME institution."""
     for field, ref_model in _TENANT_REFS.get(model, {}).items():
         ref_id = values.get(field)
         if ref_id is not None:
             ref = await session.get(ref_model, ref_id)
             if ref is None or ref.institution_id != institution_id:
                 raise AuthError(f"{ref_model.__name__} not in this institution", 404)
+
+
+async def _usage(session: AsyncSession, obj) -> list[str]:
+    """Describe rows in OTHER tables that reference `obj` via a foreign key.
+
+    The schema uses ON DELETE CASCADE / SET NULL on several of these links
+    (e.g. enrollments -> class_groups), so letting the delete through would
+    silently destroy or detach history. Callers refuse the delete instead.
+    """
+    table = obj.__table__
+    found: list[str] = []
+    for other in table.metadata.sorted_tables:
+        for fk in other.foreign_keys:
+            if fk.column.table is not table:
+                continue
+            count = await session.scalar(
+                select(func.count()).select_from(other).where(fk.parent == obj.id)
+            )
+            if count:
+                label = other.name.replace("_", " ")
+                found.append(f"{count} {label}")
+    return found
+
+
+async def update_row(
+    session: AsyncSession, model, institution_id: int, obj_id: int, values: dict
+):
+    obj = await _get_owned(session, model, institution_id, obj_id)
+    await _check_tenant_refs(session, model, institution_id, values)
     for field, val in values.items():
         setattr(obj, field, val)
     try:
@@ -182,6 +213,13 @@ async def delete_row(
     session: AsyncSession, model, institution_id: int, obj_id: int
 ) -> None:
     obj = await _get_owned(session, model, institution_id, obj_id)
+    in_use = await _usage(session, obj)
+    if in_use:
+        raise AuthError(
+            "Cannot delete: still used by " + ", ".join(in_use)
+            + ". Remove or reassign those first.",
+            409,
+        )
     try:
         await session.delete(obj)
         await session.flush()
@@ -226,6 +264,9 @@ async def accept_invitation(session: AsyncSession, data) -> User:
     inv = res.scalar_one_or_none()
     if inv is None or inv.status != InvitationStatus.pending.value:
         raise AuthError("Invalid or used invitation", 400)
+    inst = await session.get(Institution, inv.institution_id)
+    if inst is None or inst.status != InstitutionStatus.active.value:
+        raise AuthError("This institution is not currently active", 403)
     if _aware(inv.expires_at) < _utcnow():
         inv.status = InvitationStatus.expired.value
         raise AuthError("Invitation expired", 400)
@@ -266,6 +307,8 @@ async def student_self_register(session: AsyncSession, data) -> User:
     institution = res.scalar_one_or_none()
     if institution is None:
         raise AuthError("Unknown institution code", 404)
+    if institution.status != InstitutionStatus.active.value:
+        raise AuthError("This institution is not accepting registrations", 403)
 
     # Register number must be unique within the institution.
     dup = await session.execute(
@@ -381,6 +424,23 @@ async def enroll_student(
     cg = await session.get(ClassGroup, data.class_group_id)
     if cg is None or cg.institution_id != institution_id:
         raise AuthError("Class group not in this institution", 404)
+    if not await _user_has_role(
+        session, data.student_user_id, RoleName.student, institution_id
+    ):
+        raise AuthError("Target user is not a student in this institution", 400)
+    if data.term_id is not None:
+        term = await session.get(Term, data.term_id)
+        if term is None or term.institution_id != institution_id:
+            raise AuthError("Term not in this institution", 404)
+    existing = await session.scalar(
+        select(Enrollment.id).where(
+            Enrollment.student_user_id == data.student_user_id,
+            Enrollment.class_group_id == data.class_group_id,
+            Enrollment.status == EnrollmentStatus.active.value,
+        ).limit(1)
+    )
+    if existing is not None:
+        raise AuthError("Student is already enrolled in this class group", 409)
     obj = Enrollment(
         institution_id=institution_id,
         student_user_id=data.student_user_id,
@@ -406,6 +466,24 @@ async def transfer_enrollment(
     current = await session.get(Enrollment, data.enrollment_id)
     if current is None or current.institution_id != institution_id:
         raise AuthError("Enrollment not found", 404)
+    if current.status != EnrollmentStatus.active.value:
+        raise AuthError("Only an active enrollment can be transferred", 409)
+    target = await session.get(ClassGroup, data.new_class_group_id)
+    if target is None or target.institution_id != institution_id:
+        raise AuthError("Class group not in this institution", 404)
+    already = await session.scalar(
+        select(Enrollment.id).where(
+            Enrollment.student_user_id == current.student_user_id,
+            Enrollment.class_group_id == target.id,
+            Enrollment.status == EnrollmentStatus.active.value,
+        ).limit(1)
+    )
+    if target.id == current.class_group_id or already is not None:
+        raise AuthError("Student is already in this class group", 409)
+    if data.term_id is not None:
+        term = await session.get(Term, data.term_id)
+        if term is None or term.institution_id != institution_id:
+            raise AuthError("Term not in this institution", 404)
     # Preserve history: close the old enrollment, create a new one.
     current.status = EnrollmentStatus.transferred.value
     current.ended_at = _utcnow()

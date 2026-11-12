@@ -670,7 +670,10 @@ input[type="radio"] {
 /* ========================= Tabs (segmented pill control) ========================= */
 .tabs {
   display: inline-flex;
-  flex-wrap: wrap;
+  /* One row; scrolls sideways on narrow screens instead of wrapping the pill. */
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
   gap: 4px;
   padding: 4px;
   background: rgba(15, 23, 40, 0.05);
@@ -1169,6 +1172,113 @@ input[type="radio"] {
   animation: rise 480ms var(--ease-out) both;
 }
 
+/* ========================= Institution branding ========================= */
+.inst-logo {
+  display: block;
+  flex: none;
+  object-fit: contain;
+  background: #fff;
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-xs);
+}
+.inst-logo-fallback {
+  display: grid;
+  place-items: center;
+  background: var(--grad-brand);
+  color: #fff;
+  font-family: var(--font-display);
+  font-weight: 750;
+  border: none;
+  box-shadow: var(--shadow-glow);
+}
+.inst-chip {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  min-width: 0;
+}
+.inst-chip-dark {
+  padding: var(--s-3);
+  margin-bottom: var(--s-2);
+  border-radius: var(--r-lg);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+.inst-chip-name {
+  font-weight: 650;
+  font-size: var(--text-sm);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.inst-chip-meta { font-size: var(--text-xs); }
+.inst-chip-dark .inst-chip-name { color: #fff; }
+.inst-chip-dark .inst-chip-meta { color: #9aa1d4; }
+.inst-chip-light .inst-chip-name { color: var(--text-strong); }
+.inst-chip-light .inst-chip-meta { color: var(--text-muted); }
+
+.inst-card { overflow: hidden; }
+.inst-hero {
+  display: flex;
+  align-items: center;
+  gap: var(--s-5);
+  flex-wrap: wrap;
+  padding: var(--s-6);
+  background:
+    radial-gradient(400px 160px at 100% 0%, rgba(192, 38, 211, 0.1), transparent 70%),
+    var(--grad-brand-soft);
+  border-bottom: 1px solid var(--border);
+}
+.inst-name { font-size: var(--text-xl); margin-top: var(--s-1); }
+.inst-info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--s-5);
+}
+.inst-info-row { display: flex; gap: var(--s-3); align-items: flex-start; }
+.inst-info-icon {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: var(--grad-brand-soft);
+  color: var(--brand-600);
+  flex: none;
+}
+.inst-info-label {
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+.inst-info-value { color: var(--text-strong); overflow-wrap: anywhere; }
+
+/* ========================= Long forms ========================= */
+.form-section {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  gap: var(--s-6);
+  padding-bottom: var(--s-6);
+  border-bottom: 1px solid var(--border);
+}
+.form-section:last-child { border-bottom: none; padding-bottom: 0; }
+.form-section-head h3 { font-size: var(--text-md); margin-bottom: var(--s-1); }
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s-4);
+}
+.span-2 { grid-column: 1 / -1; }
+.logo-picker { display: flex; align-items: center; gap: var(--s-5); }
+@media (max-width: 860px) {
+  .form-section { grid-template-columns: 1fr; gap: var(--s-4); }
+}
+@media (max-width: 600px) {
+  .form-grid { grid-template-columns: 1fr; }
+}
+
 /* Dividers */
 .hr {
   height: 1px;
@@ -1222,4 +1332,16 @@ input[type="radio"] {
   .page { padding: var(--s-5) var(--s-4); }
   h1, .page-title { font-size: var(--text-xl); }
   .card-pad, .dialog-pad { padding: var(--s-5); }
+}
+
+/* Student header: institution chip sits between brand and user */
+.student-inst {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  justify-content: center;
+}
+.student-inst .inst-chip { max-width: 360px; }
+@media (max-width: 700px) {
+  .student-inst { display: none; }
 }

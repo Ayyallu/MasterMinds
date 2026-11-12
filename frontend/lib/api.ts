@@ -99,14 +99,60 @@ async function request<T>(
   } catch {
     data = text;
   }
-  if (!resp.ok) {
-    const detail =
-      data && typeof data === "object" && "detail" in data
-        ? (data as { detail?: unknown }).detail
-        : null;
-    throw new Error(typeof detail === "string" ? detail : `Request failed (${resp.status})`);
-  }
+  if (!resp.ok) throw new Error(errorMessage(data, resp.status));
   return data as T;
+}
+
+/** Turn a FastAPI error body into a readable message (incl. 422 field errors). */
+function errorMessage(data: unknown, status: number): string {
+  const detail =
+    data && typeof data === "object" && "detail" in data
+      ? (data as { detail?: unknown }).detail
+      : null;
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail) && detail.length > 0) {
+    return detail
+      .map((d: { loc?: unknown[]; msg?: string }) => {
+        const field = Array.isArray(d.loc) ? String(d.loc[d.loc.length - 1] ?? "") : "";
+        const msg = (d.msg ?? "Invalid value").replace(/^Value error, /, "");
+        return field && field !== "body" ? `${field.replaceAll("_", " ")}: ${msg}` : msg;
+      })
+      .join("; ");
+  }
+  return `Request failed (${status})`;
+}
+
+/** Authenticated fetch for non-JSON bodies (uploads, binary downloads). */
+async function rawFetch(path: string, init: RequestInit, retry = true): Promise<Response> {
+  const headers = new Headers(init.headers);
+  const token = getToken();
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+  const resp = await fetch(`${API_BASE_URL}${path}`, { ...init, headers });
+  if (resp.status === 401 && retry && (await refreshSession())) {
+    return rawFetch(path, init, false);
+  }
+  return resp;
+}
+
+/** Upload a multipart form (e.g. a logo). Returns parsed JSON. */
+export async function apiUpload<T = unknown>(path: string, form: FormData, method = "PUT"): Promise<T> {
+  const resp = await rawFetch(path, { method, body: form });
+  const text = await resp.text();
+  let data: unknown = null;
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch {
+    data = text;
+  }
+  if (!resp.ok) throw new Error(errorMessage(data, resp.status));
+  return data as T;
+}
+
+/** Download an authenticated binary resource (e.g. an image) as a Blob. */
+export async function apiBlob(path: string): Promise<Blob> {
+  const resp = await rawFetch(path, { method: "GET" });
+  if (!resp.ok) throw new Error(`Request failed (${resp.status})`);
+  return resp.blob();
 }
 
 export async function api<T = unknown>(

@@ -5,16 +5,20 @@ import type { ReactNode } from "react";
 import { Icon } from "./icons";
 import { Button } from "./ui";
 import { initials } from "@/lib/session";
+import { InstitutionChip } from "./Institution";
 
 /** Top-bar shell for the student portal (no sidebar — fewer, focused screens). */
 export function StudentShell({
   userName,
+  institutionId,
   right,
   onSignOut,
   children,
   maxWidth = 1080,
 }: {
   userName?: string;
+  /** When set, the member's institution logo + name are shown in the header. */
+  institutionId?: number;
   right?: ReactNode;
   onSignOut?: () => void;
   children: ReactNode;
@@ -29,6 +33,11 @@ export function StudentShell({
           </span>
           MasterMinds
         </Link>
+        {institutionId !== undefined && (
+          <div className="student-inst">
+            <InstitutionChip institutionId={institutionId} variant="light" />
+          </div>
+        )}
         <div className="row gap-3">
           {right}
           {userName && (

@@ -154,9 +154,9 @@ async def list_student_exams(
                     Enrollment.institution_id == exam.institution_id,
                     Enrollment.class_group_id == exam.class_group_id,
                     Enrollment.status == EnrollmentStatus.active.value,
-                )
+                ).limit(1)
             )
-            if enrollment.scalar_one_or_none() is None:
+            if enrollment.scalar() is None:
                 continue
 
         attempts_result = await session.execute(

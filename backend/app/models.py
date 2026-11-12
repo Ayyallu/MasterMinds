@@ -11,6 +11,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Integer,
+    LargeBinary,
     String,
     UniqueConstraint,
 )
@@ -58,6 +59,29 @@ class Institution(Base):
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+
+    # --- Profile (migration 0009). Nullable so older rows stay valid. ---
+    institution_type: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    affiliation: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    established_year: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    head_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    email: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    phone: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    website: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    address_line1: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    address_line2: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    city: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    state: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    postal_code: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    country: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    time_zone: Mapped[str] = mapped_column(String(64), default="UTC", nullable=False)
+    # Small raster logo kept in the DB (no filesystem dependency); served only
+    # to members of the institution and Super Admins.
+    logo_data: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    logo_content_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
     )
 
 

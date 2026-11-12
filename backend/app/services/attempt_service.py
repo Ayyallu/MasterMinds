@@ -3,8 +3,9 @@ from __future__ import annotations
 
 import random
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal, InvalidOperation
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import (
@@ -43,17 +44,18 @@ async def _eligible(
             InstitutionMembership.status == UserStatus.active.value,
         )
     )
-    if res.scalar_one_or_none() is None:
+    if res.scalars().first() is None or exam.institution_id not in current.institution_ids:
+        # institution_ids only contains ACTIVE institutions (disabled ones drop out).
         raise AuthError("Not eligible for this exam", 403)
     if exam.class_group_id is not None:
         enr = await session.execute(
-            select(Enrollment).where(
+            select(Enrollment.id).where(
                 Enrollment.student_user_id == current.id,
                 Enrollment.class_group_id == exam.class_group_id,
                 Enrollment.status == EnrollmentStatus.active.value,
-            )
+            ).limit(1)
         )
-        if enr.scalar_one_or_none() is None:
+        if enr.scalar() is None:
             raise AuthError("Not enrolled in this exam's class", 403)
 
 
@@ -120,6 +122,9 @@ async def start_or_resume(
     if exam is None:
         raise AuthError("Exam not found", 404)
     await _eligible(session, current, exam)
+    # Serialize concurrent "Start" clicks for the same student + exam so a
+    # double-click can never create two attempts.
+    await _advisory_lock(session, 7001, exam_id * 1_000_003 + current.id)
     now = _utcnow()
 
     # Resume an existing in-progress attempt (same snapshot) if present.
@@ -169,10 +174,23 @@ async def start_or_resume(
     return attempt
 
 
+async def _advisory_lock(session: AsyncSession, key1: int, key2: int) -> None:
+    """Transaction-scoped lock (PostgreSQL). No-op on other databases (tests)."""
+    if session.bind.dialect.name == "postgresql":
+        await session.execute(
+            text("SELECT pg_advisory_xact_lock(:a, :b)"),
+            {"a": key1, "b": key2 % 2_147_483_647},
+        )
+
+
 async def _load_owned_attempt(
-    session: AsyncSession, current: CurrentUser, attempt_id: int
+    session: AsyncSession, current: CurrentUser, attempt_id: int, *, lock: bool = False
 ):
-    attempt = await session.get(ExamAttempt, attempt_id)
+    # lock=True takes a row lock (SELECT ... FOR UPDATE) so concurrent autosaves
+    # and submits on one attempt run one at a time instead of racing.
+    attempt = await session.get(
+        ExamAttempt, attempt_id, with_for_update=lock, populate_existing=lock
+    )
     if attempt is None or attempt.student_user_id != current.id:
         raise AuthError("Attempt not found", 404)
     return attempt
@@ -191,7 +209,7 @@ async def save_answer(
     question_version_id: int,
     answer_in,
 ):
-    attempt = await _load_owned_attempt(session, current, attempt_id)
+    attempt = await _load_owned_attempt(session, current, attempt_id, lock=True)
     _finalize_if_expired(attempt, _utcnow())
     if attempt.status != AttemptStatus.in_progress.value:
         raise AuthError("Attempt is no longer open for answers", 409)
@@ -232,7 +250,16 @@ def _validate_answer(snap_q: dict, answer_in) -> dict:
     if snap_q["type"] == "numerical":
         if answer_in.numerical_value is None:
             raise AuthError("numerical_value required", 400)
-        return {"numerical_value": str(answer_in.numerical_value)}
+        value = str(answer_in.numerical_value).strip()
+        if value == "":
+            return {"numerical_value": ""}  # student cleared the answer
+        try:
+            ok = Decimal(value).is_finite()
+        except InvalidOperation:
+            ok = False
+        if not ok:
+            raise AuthError("Enter a number (e.g. 3.14)", 400)
+        return {"numerical_value": value}
     allowed = set(snap_q["option_order"])
     selected = answer_in.selected_option_ids or []
     for oid in selected:
@@ -244,7 +271,7 @@ def _validate_answer(snap_q: dict, answer_in) -> dict:
 
 
 async def submit(session: AsyncSession, current: CurrentUser, attempt_id: int):
-    attempt = await _load_owned_attempt(session, current, attempt_id)
+    attempt = await _load_owned_attempt(session, current, attempt_id, lock=True)
     now = _utcnow()
     _finalize_if_expired(attempt, now)
     # Idempotent: a completed attempt returns unchanged, never duplicated.

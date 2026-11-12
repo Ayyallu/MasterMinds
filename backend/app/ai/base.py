@@ -41,6 +41,11 @@ class ProviderNotConfigured(ProviderError):
     """The provider is selected but missing required configuration (e.g. key)."""
 
 
+class ProviderAuthError(ProviderError):
+    """Permanent rejection (bad key, unavailable model, invalid request).
+    Retrying cannot help, so callers fail fast and surface the message."""
+
+
 class QuestionProvider(abc.ABC):
     name: str = "base"
 

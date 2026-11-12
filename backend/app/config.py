@@ -55,10 +55,11 @@ class Settings(BaseSettings):
     ai_provider: str = "mock"  # "mock" | "nvidia"
     nvidia_api_key: str = ""
     nvidia_base_url: str = "https://integrate.api.nvidia.com/v1"
-    nvidia_model: str = "meta/llama-3.1-8b-instruct"
+    # meta/llama-3.1-8b-instruct reached end-of-life on NIM (2026-08-26).
+    nvidia_model: str = "nvidia/nemotron-3-ultra-550b-a55b"
     ai_max_pool_size: int = 50
     ai_retry_max: int = 2
-    ai_request_timeout_seconds: float = 30.0
+    ai_request_timeout_seconds: float = 120.0  # per batch of up to 5 questions
     ai_generation_max_per_window: int = 10
     ai_generation_window_seconds: int = 3600
 

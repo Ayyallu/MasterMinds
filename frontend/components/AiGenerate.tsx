@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { Icon } from "./icons";
 import {
@@ -16,6 +16,11 @@ import {
   StatusBadge,
   useToast,
 } from "./ui";
+
+type AiStatus = { provider: string; model: string; configured: boolean };
+
+/** Max pool size per request — mirrors the backend's AI_MAX_POOL_SIZE default. */
+const MAX_COUNT = 50;
 
 export type Job = {
   id: number;
@@ -50,6 +55,11 @@ export function GenerateForm({
   const [topics, setTopics] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [status, setStatus] = useState<AiStatus | null>(null);
+
+  useEffect(() => {
+    api<AiStatus>("/ai/status").then(setStatus).catch(() => setStatus(null));
+  }, []);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -67,7 +77,14 @@ export function GenerateForm({
       };
       const job = await api<Job>(endpoint, { method: "POST", body });
       onJob(job);
-      toast.push(`Generated ${job.stored_count} candidate${job.stored_count === 1 ? "" : "s"}.`, "success");
+      if (job.status === "failed") {
+        setError(job.error ?? "Generation failed.");
+        toast.push("AI generation failed.", "error");
+      } else if (job.stored_count === 0) {
+        toast.push("No usable questions were produced — see the job details.", "info");
+      } else {
+        toast.push(`Generated ${job.stored_count} candidate${job.stored_count === 1 ? "" : "s"}.`, "success");
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Generation failed.");
     } finally {
@@ -88,8 +105,8 @@ export function GenerateForm({
               <option value="numerical">Numerical</option>
             </Select>
           </Field>
-          <Field label="Count" hint="1–200">
-            <Input type="number" min={1} max={200} value={count} onChange={(e) => setCount(Math.min(200, Math.max(1, Number(e.target.value) || 1)))} aria-label="Count" style={{ width: 100 }} />
+          <Field label="Count" hint={`1–${MAX_COUNT}`}>
+            <Input type="number" min={1} max={MAX_COUNT} value={count} onChange={(e) => setCount(Math.min(MAX_COUNT, Math.max(1, Number(e.target.value) || 1)))} aria-label="Count" style={{ width: 100 }} />
           </Field>
           <Field label="Difficulty">
             <Select value={difficulty} onChange={(e) => setDifficulty(e.target.value)} aria-label="Difficulty">
@@ -110,6 +127,23 @@ export function GenerateForm({
         <Field label="Topics (optional)" hint="Comma-separated.">
           <Input value={topics} onChange={(e) => setTopics(e.target.value)} placeholder="Kinematics, Newton's laws" aria-label="Topics" />
         </Field>
+        {status && status.provider === "mock" && (
+          <Alert tone="warning">
+            Demo mode: the built-in <strong>mock</strong> generator is active, so questions are placeholders. Set{" "}
+            <code>AI_PROVIDER=nvidia</code> and <code>NVIDIA_API_KEY</code> in <code>backend/.env</code> and restart the backend to use real AI.
+          </Alert>
+        )}
+        {status && status.provider !== "mock" && !status.configured && (
+          <Alert tone="error">
+            The AI provider is <strong>{status.provider}</strong> but no API key is configured on the server.
+          </Alert>
+        )}
+        {status && status.provider !== "mock" && status.configured && (
+          <p className="muted text-sm row gap-2">
+            <Icon.Sparkles size={14} /> Using <strong className="strong">{status.provider}</strong> · <span className="mono">{status.model}</span>
+            {count > 10 && <> — large pools take a minute or more.</>}
+          </p>
+        )}
         <Alert tone="info">
           Candidates are validated, de-duplicated and stored as <strong>in&nbsp;review</strong>. No student
           data is sent to the provider. Nothing is generated during a live exam.

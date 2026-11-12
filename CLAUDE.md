@@ -17,6 +17,11 @@ Multi-tenant online examination platform for schools and colleges.
 
 **All ten phases (1 → 10) are implemented, verified and pushed.**
 
+## Post-phase additions
+- **Academic structure CRUD:** list / edit (PUT) / delete for academic years, terms, grade levels, departments, courses, class groups (`academic_service.update_row/delete_row`; in-use rows return 409). No migration.
+- **QA hardening (2026-11-12, `docs/QA_E2E_REPORT.md`):** academic deletes refuse rows still referenced by ANY FK (schema has CASCADE/SET NULL — never rely on the DB to refuse); disabled institutions are locked out (login, existing tokens, refresh, exams, self-registration) via `get_user_institution_ids` (active institutions only) + `institution_access_blocked`; enrollments must be students, no duplicate active enrollment, transfer validates target; autosave/submit lock the attempt row, start takes an advisory lock; tolerance uses `Decimal`; corrections bounded 0..total. End-to-end suites live in `qa/` (`api_e2e.py` against an isolated `masterminds_qa` DB on :8001, `ui_e2e.py` against the dev stack).
+- **Institution profile:** Super Admin creates institutions directly (`POST /admin/institutions`) with full profile (type, affiliation, head, contacts, address, time zone) + first Institution Admin; edits via `PUT /admin/institutions/{id}`; enable/disable. Logo (PNG/JPEG/WebP ≤1 MB, magic-byte checked, no SVG) stored in the DB and served only to members/Super Admin (`/institutions/{id}/logo`). Members read `GET /institutions/{id}/profile` (tenant-scoped). Migration `0009_institution_profile`. `tzdata` added for zone validation on Windows.
+
 ## Scoring notes (Phase 8)
 - `scoring_service.score_attempt` recomputes from `snapshot` + `attempt_answers` + immutable `question_versions`; `attempt_scores` holds the current score, `score_history` every run/correction. Census rule: enrollment counts if it began on/before the census date and had not ended before it.
 - Student result (`GET /attempts/{id}/result`) returns per-question outcome only (marks/awarded/correct) — never the correct answer or explanation — and only once `results_published`.
@@ -31,7 +36,9 @@ Multi-tenant online examination platform for schools and colleges.
 - Teacher authoring scope checked against `teacher_assignments`; approve/reject/schedule/reopen require Institution Admin.
 
 ## AI generation notes (Phase 5)
-- `AI_PROVIDER=mock` by default. Real NIM needs `AI_PROVIDER=nvidia` + `NVIDIA_API_KEY`; if selected but unconfigured, generate endpoints return 503.
+- `AI_PROVIDER=mock` by default. Real NIM needs `AI_PROVIDER=nvidia` + `NVIDIA_API_KEY` **in `backend/.env`** (never `.env.example`); if selected but unconfigured, generate endpoints return 503.
+- Default model `nvidia/nemotron-3-ultra-550b-a55b` (`meta/llama-3.1-8b-instruct` is end-of-life on NIM; model access varies per NVIDIA account). Verify key+model with `python -m scripts.check_ai`.
+- NIM adapter batches 5 questions/call, 4 calls concurrently; tolerates fenced/prose JSON and normalises field variants. Bad key / unavailable model = `ProviderAuthError` (no retries, reason stored on the job). `GET /ai/status` tells the UI which provider is active. Tests force the mock provider (conftest autouse).
 - Generation is synchronous+bounded (no Celery/Redis yet — documented follow-up). AI candidates land as `in_review` and require human approval; only approved versions are exam-selectable (Phase 6).
 - Private generation: `POST /institutions/{id}/ai/generate` (staff). Global: `POST /global/ai/generate` (Central Reviewer). Global library reuse: `POST /global/library/search` (any staff).
 

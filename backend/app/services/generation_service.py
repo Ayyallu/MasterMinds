@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai.base import (
     GenerationSpec,
+    ProviderAuthError,
     ProviderError,
     QuestionProvider,
 )
@@ -103,15 +104,20 @@ async def run_generation(
         try:
             result = await provider.generate(spec)
             break
+        except ProviderAuthError as exc:
+            # Bad key / unavailable model: retrying cannot succeed.
+            last_error = exc
+            break
         except ProviderError as exc:
             last_error = exc
             if attempt < _settings.ai_retry_max:
-                await asyncio.sleep(0)  # yield; real backoff in a job runner
+                await asyncio.sleep(0.5 * (attempt + 1))  # short backoff
             continue
 
     if result is None:
         job.status = GenerationStatus.failed.value
-        job.error = f"Provider failed: {type(last_error).__name__}"
+        # Provider messages are written to be secret-free and actionable.
+        job.error = (str(last_error) or type(last_error).__name__)[:500]
         job.finished_at = _utcnow()
         await record_audit(
             session,

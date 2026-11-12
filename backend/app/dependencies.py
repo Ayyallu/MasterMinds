@@ -40,6 +40,12 @@ async def get_current_user(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Account not active"
         )
 
+    # Tokens issued before an institution was disabled must stop working too.
+    if await auth_service.institution_access_blocked(session, user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your institution's access has been disabled",
+        )
     roles = await auth_service.get_user_roles(session, user_id)
     institution_ids = await auth_service.get_user_institution_ids(session, user_id)
     return CurrentUser(

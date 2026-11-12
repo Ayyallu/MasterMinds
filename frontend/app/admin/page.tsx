@@ -4,6 +4,7 @@ import Link from "next/link";
 import { api } from "@/lib/api";
 import { useMe } from "@/components/SessionProvider";
 import { Icon } from "@/components/icons";
+import { InstitutionProfileCard, useInstitutionProfile } from "@/components/Institution";
 import {
   AsyncView,
   Button,
@@ -61,7 +62,7 @@ function SuperAdminOverview({ me }: { me: Me }) {
       <h2 style={{ marginBottom: "var(--s-4)" }}>Jump back in</h2>
       <div className="grid grid-cards">
         <QuickLink href="/admin/registrations" icon={<Icon.Inbox size={20} />} title="Registrations" body="Approve or reject institution registration requests and provision admins." />
-        <QuickLink href="/admin/institutions" icon={<Icon.Building size={20} />} title="Institutions" body="Manage institution status across the platform." />
+        <QuickLink href="/admin/institutions" icon={<Icon.Building size={20} />} title="Institutions" body="Create schools and colleges, edit their profiles and control access." />
         <QuickLink href="/admin/global" icon={<Icon.Globe size={20} />} title="Global library" body="Generate and review shared questions available to all institutions." />
         <QuickLink href="/admin/reports" icon={<Icon.Chart size={20} />} title="Reports" body="Audited cross-tenant exam reporting." />
       </div>
@@ -72,6 +73,7 @@ function SuperAdminOverview({ me }: { me: Me }) {
 function InstitutionOverview({ me }: { me: Me }) {
   const institutionId = me.institution_ids[0];
   const isAdmin = me.roles.includes("institution_admin");
+  const profile = useInstitutionProfile(institutionId);
 
   const state = useAsync(
     async () => {
@@ -100,6 +102,11 @@ function InstitutionOverview({ me }: { me: Me }) {
         </Card>
       ) : (
         <>
+          {profile.data && (
+            <div style={{ marginBottom: "var(--s-8)" }}>
+              <InstitutionProfileCard profile={profile.data} canEditLogo={isAdmin} onChanged={() => void profile.reload()} />
+            </div>
+          )}
           {isAdmin && (
             <AsyncView state={state}>
               {(d) => (

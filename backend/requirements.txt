@@ -5,6 +5,7 @@ asyncpg==0.30.0
 alembic==1.14.0
 pydantic[email]==2.10.4
 pydantic-settings==2.7.1
+tzdata==2025.2  # IANA zones for zoneinfo on Windows / slim images
 
 # Auth / security
 PyJWT==2.10.1
