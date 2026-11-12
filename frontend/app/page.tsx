@@ -25,9 +25,19 @@ const features = [
   },
 ];
 
+const highlights = [
+  { value: "4", label: "Question types" },
+  { value: "100%", label: "Server-timed attempts" },
+  { value: "2-step", label: "Human review gates" },
+  { value: "0", label: "Answer keys sent to students" },
+];
+
 export default function Home() {
   return (
-    <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
+    <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", position: "relative", overflow: "hidden", isolation: "isolate" }}>
+      <span className="blob" style={{ width: 520, height: 520, background: "#818cf8", top: -200, left: "50%", marginLeft: -520 }} />
+      <span className="blob" style={{ width: 460, height: 460, background: "#e879f9", top: -120, left: "50%", marginLeft: 40, animationDelay: "-7s" }} />
+
       <header className="public-nav">
         <span className="brand">
           <span className="sidebar-logo">
@@ -47,41 +57,53 @@ export default function Home() {
 
       <main className="grow">
         {/* Hero */}
-        <section style={{ maxWidth: "var(--maxw)", margin: "0 auto", padding: "var(--s-16) var(--s-6) var(--s-12)" }}>
-          <div style={{ maxWidth: 680 }}>
-            <span className="badge badge-accent" style={{ marginBottom: "var(--s-5)" }}>
-              Online examination platform
-            </span>
-            <h1 style={{ fontSize: "var(--text-3xl)", lineHeight: 1.1, marginBottom: "var(--s-4)" }}>
-              Online examinations, made simpler and secure.
-            </h1>
-            <p className="muted" style={{ fontSize: "var(--text-lg)", maxWidth: 560, marginBottom: "var(--s-8)" }}>
-              A secure examination platform for schools and colleges — from question banks and
-              AI-assisted authoring to reliable delivery, scoring and reporting.
-            </p>
-            <div className="row gap-3 wrap">
-              <Link href="/student" className="btn btn-primary btn-lg" style={{ gap: "var(--s-2)" }}>
-                Take an exam <Icon.ArrowRight size={18} />
-              </Link>
-              <Link href="/student/register" className="btn btn-secondary btn-lg">
-                Register as a student
-              </Link>
-              <Link href="/admin" className="btn btn-ghost btn-lg">
-                Manage an institution
-              </Link>
+        <section className="hero">
+          <span className="badge badge-accent">
+            <Icon.Sparkles size={14} /> Online examination platform
+          </span>
+          <h1 className="hero-title">
+            Online examinations, made <span className="gradient-text">simpler and secure.</span>
+          </h1>
+          <p className="hero-sub">
+            A secure examination platform for schools and colleges — from question banks and
+            AI-assisted authoring to reliable delivery, scoring and reporting.
+          </p>
+          <div className="hero-actions">
+            <Link href="/student" className="btn btn-primary btn-lg">
+              Take an exam <Icon.ArrowRight size={18} />
+            </Link>
+            <Link href="/student/register" className="btn btn-secondary btn-lg">
+              Register as a student
+            </Link>
+            <Link href="/admin" className="btn btn-ghost btn-lg">
+              Manage an institution
+            </Link>
+          </div>
+        </section>
+
+        {/* Highlights strip */}
+        <section style={{ maxWidth: "var(--maxw)", margin: "0 auto", padding: "0 var(--s-6) var(--s-10)" }}>
+          <div className="card" style={{ background: "var(--bg-glass)", backdropFilter: "blur(14px)" }}>
+            <div className="grid grid-stats card-pad" style={{ textAlign: "center" }}>
+              {highlights.map((h) => (
+                <div key={h.label} className="stack gap-1">
+                  <span className="stat-value gradient-text" style={{ fontSize: "var(--text-2xl)" }}>
+                    {h.value}
+                  </span>
+                  <span className="muted text-sm">{h.label}</span>
+                </div>
+              ))}
             </div>
           </div>
         </section>
 
         {/* Features */}
         <section style={{ maxWidth: "var(--maxw)", margin: "0 auto", padding: "0 var(--s-6) var(--s-16)" }}>
-          <div className="grid grid-cards">
+          <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))" }}>
             {features.map((f) => (
-              <div className="card card-pad" key={f.title}>
-                <span className="stat-icon" style={{ width: 40, height: 40, marginBottom: "var(--s-4)" }}>
-                  {f.icon}
-                </span>
-                <h3 style={{ marginBottom: "var(--s-2)" }}>{f.title}</h3>
+              <div className="card card-interactive feature-card" key={f.title}>
+                <span className="stat-icon">{f.icon}</span>
+                <h3>{f.title}</h3>
                 <p className="muted text-sm">{f.body}</p>
               </div>
             ))}
@@ -89,7 +111,7 @@ export default function Home() {
         </section>
       </main>
 
-      <footer style={{ borderTop: "1px solid var(--border)", background: "var(--bg-surface)" }}>
+      <footer style={{ borderTop: "1px solid var(--border)", background: "var(--bg-glass)", backdropFilter: "blur(12px)" }}>
         <div
           className="row between wrap gap-3"
           style={{ maxWidth: "var(--maxw)", margin: "0 auto", padding: "var(--s-5) var(--s-6)" }}

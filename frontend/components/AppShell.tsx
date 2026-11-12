@@ -28,6 +28,7 @@ export function AppShell({
 
   const isActive = (href: string) =>
     pathname === href || (href !== "/admin" && href !== "/student" && pathname.startsWith(href));
+  const activeLabel = nav.flatMap((g) => g.items).find((i) => isActive(i.href))?.label;
 
   return (
     <div className="shell" style={accent ? ({ ["--accent" as string]: accent } as React.CSSProperties) : undefined}>
@@ -58,13 +59,11 @@ export function AppShell({
           ))}
         </nav>
         <div className="sidebar-foot">
-          <div className="row gap-3" style={{ padding: "var(--s-2)" }}>
+          <div className="sidebar-user">
             <span className="avatar">{initials(me.full_name)}</span>
             <div className="stack" style={{ minWidth: 0 }}>
-              <span style={{ color: "#fff", fontWeight: 600, fontSize: "var(--text-sm)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                {me.full_name}
-              </span>
-              <span style={{ color: "#8b96bd", fontSize: "var(--text-xs)" }}>{primaryRoleLabel(me)}</span>
+              <span className="sidebar-user-name">{me.full_name}</span>
+              <span className="sidebar-user-role">{primaryRoleLabel(me)}</span>
             </div>
           </div>
         </div>
@@ -80,14 +79,10 @@ export function AppShell({
             <Icon.Menu size={20} />
           </button>
           <div className="row gap-3 grow" style={{ minWidth: 0 }}>
-            <span className="brand" style={{ fontSize: "var(--text-md)" }}>
-              {primaryRoleLabel(me)} workspace
-            </span>
+            <span className="topbar-title">{activeLabel ?? `${primaryRoleLabel(me)} workspace`}</span>
           </div>
           <div className="row gap-3">
-            <span className="muted text-sm" style={{ whiteSpace: "nowrap" }}>
-              {me.email ?? me.full_name}
-            </span>
+            {me.email && <span className="topbar-chip">{me.email}</span>}
             <Button variant="secondary" size="sm" icon={<Icon.Logout size={16} />} onClick={onSignOut}>
               Sign out
             </Button>

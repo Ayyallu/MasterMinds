@@ -274,3 +274,37 @@ async def test_roster_import_tenant_scoped(client, two_institutions):
         headers=headers,
     )
     assert r.status_code == 403
+
+
+async def test_structure_list_edit_delete(client, factory, two_institutions):
+    inst_a, inst_b = two_institutions
+    headers = await _auth_headers(client, "admin_a@example.com")
+    base = f"/institutions/{inst_a.id}"
+
+    yr = (await client.post(f"{base}/academic-years", json={"name": "2026"}, headers=headers)).json()["id"]
+    term = (await client.post(f"{base}/terms", json={"academic_year_id": yr, "name": "T1"}, headers=headers)).json()["id"]
+    cg = (await client.post(f"{base}/class-groups", json={"name": "G1", "term_id": term}, headers=headers)).json()["id"]
+    other = (await client.post(f"{base}/class-groups", json={"name": "G2"}, headers=headers)).json()["id"]
+
+    # List shows full rows
+    terms = (await client.get(f"{base}/terms", headers=headers)).json()
+    assert terms[0]["name"] == "T1" and terms[0]["academic_year_id"] == yr
+
+    # Edit
+    r = await client.put(f"{base}/class-groups/{cg}", json={"name": "G1 renamed", "kind": "section", "term_id": term}, headers=headers)
+    assert r.status_code == 200 and r.json()["name"] == "G1 renamed"
+
+    # Duplicate name -> 409
+    dup = await client.put(f"{base}/class-groups/{cg}", json={"name": "G2"}, headers=headers)
+    assert dup.status_code == 409
+
+    # Delete
+    assert (await client.delete(f"{base}/class-groups/{other}", headers=headers)).status_code == 204
+    left = (await client.get(f"{base}/class-groups", headers=headers)).json()
+    assert [g["id"] for g in left] == [cg]
+    assert (await client.delete(f"{base}/class-groups/{other}", headers=headers)).status_code == 404
+
+    # Other tenant cannot touch it
+    admin_b = await _auth_headers(client, "admin_b@example.com")
+    assert (await client.delete(f"/institutions/{inst_b.id}/class-groups/{cg}", headers=admin_b)).status_code == 404
+    assert (await client.delete(f"{base}/class-groups/{cg}", headers=admin_b)).status_code == 403

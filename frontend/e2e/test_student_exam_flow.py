@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+from datetime import datetime, timedelta, timezone
 from urllib.parse import urlparse
 
 from playwright.sync_api import Page, expect
@@ -92,10 +93,14 @@ def test_student_signs_in_answers_and_submits_exam(page: Page) -> None:
 
 
 def _attempt_payload() -> dict:
+    # Relative to now: a fixed past deadline makes the UI treat the attempt as
+    # expired and auto-submit before the test can answer.
+    now = datetime.now(timezone.utc).replace(microsecond=0)
     return {
         "id": 601, "exam_id": 501, "status": "in_progress", "attempt_no": 1,
-        "started_at": "2026-11-03T09:00:00Z",
-        "deadline_at": "2026-11-03T09:30:00Z", "submitted_at": None,
+        "started_at": now.isoformat().replace("+00:00", "Z"),
+        "deadline_at": (now + timedelta(minutes=30)).isoformat().replace("+00:00", "Z"),
+        "submitted_at": None,
         "seconds_remaining": 1800,
         "questions": [{
             "question_version_id": 701, "type": "single_mcq",

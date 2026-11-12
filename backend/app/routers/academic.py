@@ -68,16 +68,6 @@ async def add_academic_year(
     )
 
 
-@router.get("/academic-years")
-async def list_academic_years(
-    institution_id: int,
-    _: CurrentUser = Depends(require_institution_admin()),
-    session: AsyncSession = Depends(get_session),
-):
-    rows = await academic_service.list_rows(session, AcademicYear, institution_id)
-    return [{"id": r.id, "name": r.name, "is_current": r.is_current} for r in rows]
-
-
 @router.post("/terms", status_code=201)
 async def add_term(
     institution_id: int,
@@ -136,16 +126,6 @@ async def add_class_group(
     return await _create(
         session, academic_service.create_class_group(session, institution_id, payload)
     )
-
-
-@router.get("/class-groups")
-async def list_class_groups(
-    institution_id: int,
-    _: CurrentUser = Depends(require_institution_admin()),
-    session: AsyncSession = Depends(get_session),
-):
-    rows = await academic_service.list_rows(session, ClassGroup, institution_id)
-    return [{"id": r.id, "name": r.name, "kind": r.kind} for r in rows]
 
 
 @router.post("/invitations", status_code=201)
@@ -261,6 +241,63 @@ async def roster_import(
         errors=[RosterError(**e) for e in (record.errors or [])],
         committed=record.status == "committed",
     )
+
+
+# --- Generic list / edit / delete for the academic structure ---
+def _register_crud(path: str, model, schema) -> None:
+    @router.get(f"/{path}", name=f"list_{path}")
+    async def _list(
+        institution_id: int,
+        _: CurrentUser = Depends(require_institution_admin()),
+        session: AsyncSession = Depends(get_session),
+    ):
+        rows = await academic_service.list_rows(session, model, institution_id)
+        return [academic_service.row_dict(r) for r in rows]
+
+    async def _update(
+        institution_id: int,
+        obj_id: int,
+        payload,
+        _: CurrentUser = Depends(require_institution_admin()),
+        session: AsyncSession = Depends(get_session),
+    ):
+        try:
+            obj = await academic_service.update_row(
+                session, model, institution_id, obj_id, payload.model_dump()
+            )
+        except AuthError as exc:
+            raise _err(exc)
+        await session.commit()
+        return academic_service.row_dict(obj)
+
+    # `from __future__ import annotations` can't resolve a closure variable,
+    # so set the body type explicitly before registering the route.
+    _update.__annotations__["payload"] = schema
+    router.put(f"/{path}/{{obj_id}}", name=f"update_{path}")(_update)
+
+    @router.delete(f"/{path}/{{obj_id}}", status_code=204, name=f"delete_{path}")
+    async def _delete(
+        institution_id: int,
+        obj_id: int,
+        _: CurrentUser = Depends(require_institution_admin()),
+        session: AsyncSession = Depends(get_session),
+    ):
+        try:
+            await academic_service.delete_row(session, model, institution_id, obj_id)
+        except AuthError as exc:
+            raise _err(exc)
+        await session.commit()
+
+
+for _path, _model, _schema in (
+    ("academic-years", AcademicYear, AcademicYearCreate),
+    ("terms", Term, TermCreate),
+    ("grade-levels", GradeLevel, GradeLevelCreate),
+    ("departments", Department, DepartmentCreate),
+    ("courses", Course, CourseCreate),
+    ("class-groups", ClassGroup, ClassGroupCreate),
+):
+    _register_crud(_path, _model, _schema)
 
 
 # --- Public provisioning routes (no institution path / no auth) ---

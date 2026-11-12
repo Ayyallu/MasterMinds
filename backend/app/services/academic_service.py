@@ -4,6 +4,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import (
@@ -125,6 +126,68 @@ async def list_rows(session: AsyncSession, model, institution_id: int) -> list:
         select(model).where(model.institution_id == institution_id).order_by(model.id)
     )
     return list(res.scalars().all())
+
+
+def row_dict(obj) -> dict:
+    """Serialize a row's columns (minus the tenant id) for list views."""
+    out = {}
+    for col in obj.__table__.columns:
+        if col.name == "institution_id":
+            continue
+        val = getattr(obj, col.name)
+        out[col.name] = val.isoformat() if hasattr(val, "isoformat") else val
+    return out
+
+
+# Foreign keys that must stay inside the same institution when edited.
+_TENANT_REFS = {
+    Term: {"academic_year_id": AcademicYear},
+    Course: {"department_id": Department},
+    ClassGroup: {
+        "grade_level_id": GradeLevel,
+        "term_id": Term,
+        "course_id": Course,
+    },
+}
+
+
+async def _get_owned(session: AsyncSession, model, institution_id: int, obj_id: int):
+    obj = await session.get(model, obj_id)
+    if obj is None or obj.institution_id != institution_id:
+        raise AuthError("Not found", 404)
+    return obj
+
+
+async def update_row(
+    session: AsyncSession, model, institution_id: int, obj_id: int, values: dict
+):
+    obj = await _get_owned(session, model, institution_id, obj_id)
+    for field, ref_model in _TENANT_REFS.get(model, {}).items():
+        ref_id = values.get(field)
+        if ref_id is not None:
+            ref = await session.get(ref_model, ref_id)
+            if ref is None or ref.institution_id != institution_id:
+                raise AuthError(f"{ref_model.__name__} not in this institution", 404)
+    for field, val in values.items():
+        setattr(obj, field, val)
+    try:
+        await session.flush()
+    except IntegrityError:
+        await session.rollback()
+        raise AuthError("Another record already uses these values", 409)
+    return obj
+
+
+async def delete_row(
+    session: AsyncSession, model, institution_id: int, obj_id: int
+) -> None:
+    obj = await _get_owned(session, model, institution_id, obj_id)
+    try:
+        await session.delete(obj)
+        await session.flush()
+    except IntegrityError:
+        await session.rollback()
+        raise AuthError("This record is in use and cannot be deleted", 409)
 
 
 # --- Provisioning: invitations ---

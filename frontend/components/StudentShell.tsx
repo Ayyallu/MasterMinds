@@ -21,7 +21,7 @@ export function StudentShell({
   maxWidth?: number;
 }) {
   return (
-    <div style={{ minHeight: "100vh", background: "var(--bg-app)" }}>
+    <div style={{ minHeight: "100vh" }}>
       <header className="topbar" style={{ position: "sticky", top: 0 }}>
         <Link href="/student" className="brand" style={{ fontSize: "var(--text-md)" }}>
           <span className="sidebar-logo">
@@ -33,10 +33,10 @@ export function StudentShell({
           {right}
           {userName && (
             <span className="row gap-2">
-              <span className="avatar" style={{ width: 30, height: 30, fontSize: "var(--text-xs)" }}>
+              <span className="avatar" style={{ width: 32, height: 32, fontSize: "var(--text-xs)", background: "var(--grad-brand)", color: "#fff" }}>
                 {initials(userName)}
               </span>
-              <span className="muted text-sm" style={{ whiteSpace: "nowrap" }}>
+              <span className="text-sm strong" style={{ whiteSpace: "nowrap" }}>
                 {userName}
               </span>
             </span>
@@ -48,7 +48,7 @@ export function StudentShell({
           )}
         </div>
       </header>
-      <main style={{ maxWidth, margin: "0 auto", padding: "var(--s-8) var(--s-6)" }}>{children}</main>
+      <main className="content" style={{ maxWidth }}>{children}</main>
     </div>
   );
 }

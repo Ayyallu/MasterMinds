@@ -4,9 +4,10 @@
   position: sticky;
   top: 0;
   z-index: 30;
-  background: var(--bg-surface);
+  background: var(--bg-glass);
+  backdrop-filter: saturate(1.6) blur(16px);
+  -webkit-backdrop-filter: saturate(1.6) blur(16px);
   border-bottom: 1px solid var(--border);
-  box-shadow: var(--shadow-xs);
 }
 .exam-header-inner {
   max-width: 1120px;
@@ -27,8 +28,11 @@
   font-weight: 750;
   letter-spacing: -0.01em;
   padding: var(--s-2) var(--s-4);
-  border-radius: var(--r-md);
-  background: var(--grey-100);
+  border-radius: var(--r-full);
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
+  font-family: var(--font-display);
   color: var(--text-strong);
 }
 .exam-timer.warn {
@@ -71,7 +75,7 @@
   place-items: center;
   border: 1px solid var(--border-strong);
   background: var(--bg-surface);
-  border-radius: var(--r-sm);
+  border-radius: var(--r-md);
   font-weight: 650;
   font-size: var(--text-sm);
   cursor: pointer;
@@ -79,12 +83,14 @@
   transition: all var(--dur-fast) var(--ease);
 }
 .palette-btn:hover {
-  border-color: var(--grey-400);
+  border-color: var(--brand-500);
+  transform: translateY(-1px);
 }
 .palette-btn.answered {
-  background: var(--success-50);
-  border-color: var(--success-200);
-  color: var(--success-700);
+  background: var(--grad-brand);
+  border-color: transparent;
+  color: #fff;
+  box-shadow: var(--shadow-glow);
 }
 .palette-btn.current {
   border-color: var(--indigo-500);
@@ -98,17 +104,21 @@
   gap: var(--s-3);
   padding: var(--s-3) var(--s-4);
   border: 1px solid var(--border-strong);
-  border-radius: var(--r-md);
+  border-radius: var(--r-lg);
   cursor: pointer;
-  transition: border-color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease);
+  transition: border-color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease),
+    box-shadow var(--dur) var(--ease), transform var(--dur-fast) var(--ease);
   background: var(--bg-surface);
 }
 .exam-option:hover {
-  border-color: var(--grey-400);
+  border-color: rgba(99, 102, 241, 0.45);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
 }
 .exam-option.selected {
-  border-color: var(--indigo-500);
-  background: var(--indigo-50);
+  border-color: var(--brand-500);
+  background: var(--grad-brand-soft);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
 }
 .exam-option input {
   margin-top: 2px;

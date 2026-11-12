@@ -208,6 +208,17 @@ export const Icon = {
       <path d="M3 12h18M12 3c2.5 2.5 2.5 15 0 18M12 3c-2.5 2.5-2.5 15 0 18" />
     </Svg>
   ),
+  Pencil: (p: IconProps) => (
+    <Svg {...p}>
+      <path d="M4 20h4L19 9l-4-4L4 16z" />
+      <path d="M13.5 6.5l4 4" />
+    </Svg>
+  ),
+  Trash: (p: IconProps) => (
+    <Svg {...p}>
+      <path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" />
+    </Svg>
+  ),
 };
 
 export type { IconProps };
